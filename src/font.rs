@@ -5,13 +5,13 @@ use super::*;
 
 pub(super) fn draw_unknown(canvas: &mut dyn Drawable, colour: Colour) {
     let steps = [
-        GlyphStep{coord: GlyphCoord{x: ranged!([0 15] 0), y: ranged!([0 31] 24)}, 
+        GlyphStep{coord: GlyphCoord{x: r!([0 15] 0), y: r!([0 31] 24)}, 
                 tp: GlyphConnectionType::Outline{thick: false, update: true}},
-        GlyphStep{coord: GlyphCoord{x: ranged!([0 15] 12), y: ranged!([0 31] 24)}, 
+        GlyphStep{coord: GlyphCoord{x: r!([0 15] 12), y: r!([0 31] 24)}, 
                 tp: GlyphConnectionType::Outline{thick: false, update: true}},
-        GlyphStep{coord: GlyphCoord{x: ranged!([0 15] 12), y: ranged!([0 31] 0)}, 
+        GlyphStep{coord: GlyphCoord{x: r!([0 15] 12), y: r!([0 31] 0)}, 
                 tp: GlyphConnectionType::Outline{thick: false, update: true}},
-        GlyphStep{coord: GlyphCoord{x: ranged!([0 15] 0), y: ranged!([0 31] 0)},
+        GlyphStep{coord: GlyphCoord{x: r!([0 15] 0), y: r!([0 31] 0)},
                 tp: GlyphConnectionType::Outline{thick: false, update: true}},
     ];
 
@@ -75,11 +75,11 @@ pub(super) struct GlyphStep {
 impl GlyphStep {
     pub(super) fn from_raw(raw: u16) -> Self {
         let rtp = (raw & 0b111_00000_0000)>>9;
-        let ryv = (raw & 0b000_11111_0000)>>4;
-        let rxv = raw & 0b000_00000_1111;
+        let ryv = (raw>>4) % r![32];
+        let rxv = raw % r![16];
         
-        Self{coord: GlyphCoord{x: Ranged::<0,15>::new(rxv as u8).unwrap() , 
-                                y: Ranged::<0,31>::new(ryv as u8).unwrap()}, 
+        Self{coord: GlyphCoord{x: rxv, 
+                                y: ryv}, 
                 tp: GlyphConnectionType::from_raw(rtp as u8)}
     }
 
@@ -122,8 +122,8 @@ pub fn _glyphsize_by_covnent(fsize: Ranged<6,63>)-> V2 {
 
 pub(super) fn draw_glyph(steps: &mut dyn Iterator<Item=GlyphStep>, canvas: &mut dyn Drawable, colour: Colour) {
 
-    let mut ctrlpoint: GlyphCoord = GlyphCoord{x: ranged!([0 15] 0), y: ranged!([0 31] 1)};
-    let mut prevpoint: GlyphCoord = GlyphCoord{x: ranged!([0 15] 0), y: ranged!([0 31] 1)};
+    let mut ctrlpoint: GlyphCoord = GlyphCoord{x: r!([0 15] 0), y: r!([0 31] 1)};
+    let mut prevpoint: GlyphCoord = GlyphCoord{x: r!([0 15] 0), y: r!([0 31] 1)};
     let mut curve_flag = false;
 
     for step in steps {
@@ -191,7 +191,7 @@ impl GlyphData {
 
     
     fn draw_glyph(&self, canvas: &mut dyn Drawable, ops: Range<usize>, colour: Colour) {
-        struct GlyphIter<'a> {s: &'a GlyphData, end: usize, current: usize};
+        struct GlyphIter<'a> {s: &'a GlyphData, end: usize, current: usize}
         impl<'a> Iterator for GlyphIter<'a>{
             type Item = GlyphStep;
 

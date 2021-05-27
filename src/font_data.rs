@@ -13,8 +13,8 @@ use GlyphConnectionType::*;
 macro_rules! g2set {
     ($x1:literal, $y1:literal, $z1:expr; $x2:literal, $y2:literal, $z2:expr) => {
         GlyphStep::to_gdata(
-            GlyphStep{coord: GlyphCoord{x: ranged!([0 15] $x1), y: ranged!([0 31] $y1)}, tp: $z1},
-            GlyphStep{coord: GlyphCoord{x: ranged!([0 15] $x2), y: ranged!([0 31] $y2)}, tp: $z2},
+            GlyphStep{coord: GlyphCoord{x: r!([0 15] $x1), y: r!([0 31] $y1)}, tp: $z1},
+            GlyphStep{coord: GlyphCoord{x: r!([0 15] $x2), y: r!([0 31] $y2)}, tp: $z2},
         );
     };
 }

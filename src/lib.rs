@@ -73,8 +73,10 @@ display.text(text, font_size, v2!(size.x/2 - 7*5/2, size.y/2 - 12/2), Colour::WH
 */
 
 #![no_std]
+#![allow(incomplete_features)]
 #![feature(const_panic)]
-#![feature(const_fn)]
+#![feature(const_generics)]
+#![feature(const_evaluatable_checked)]
 #![deny(missing_docs)]
 #![warn(missing_doc_code_examples)]
 
@@ -91,8 +93,7 @@ pub use font::_glyphsize_by_covnent as glyphsize;
 
 extern crate ranged_integers;
 
-pub use ranged_integers::Ranged;
-pub use ranged_integers::ranged;
+pub use ranged_integers::*;
 
 mod font;
 mod font_data;
