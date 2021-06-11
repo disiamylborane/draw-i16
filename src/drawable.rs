@@ -420,23 +420,10 @@ impl<'a> dyn Drawable+'a {
     /// Generate and render a char sequence
     pub fn text(&mut self, s: &str, fontsize: V2, pos: V2, colour: Colour) {
         for (i,c) in s.chars().enumerate() {
-            let posx = pos.x as usize + fontsize.x as usize*i;
-            if posx < self.size().x as usize && posx + fontsize.x as usize > 0 {
+            let posx = pos.x + fontsize.x*i as i16;
+            if posx < self.size().x && posx + fontsize.x > 0 {
                 self.symbol(c, fontsize, V2::new(posx as i16, pos.y), colour);
             }
         }
     }
-
-    /*pub fn canvas(&mut self, c: &crate::PixelSlice, offset: V2) {
-        //let canvas_size = unsafe{c.row_count()*c.row_length};
-        let mut z = c.iter();
-
-        // FIXME: Extremely slow
-        for x in 0..c.row_length {
-            for y in 0..c.row_count() {
-                let colour = z.next().unwrap();
-                self.pixel(v2!(x,y) + offset, colour);
-            }
-        }
-    }*/
 }
