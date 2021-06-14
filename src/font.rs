@@ -15,7 +15,7 @@ pub(super) fn draw_unknown(canvas: &mut dyn Drawable, colour: Colour) {
                 tp: GlyphConnectionType::Outline{thick: false, update: true}},
     ];
 
-    let mut iter = steps.iter().map(|x| x.clone());
+    let mut iter = steps.iter().cloned();
 
     draw_glyph(&mut iter, canvas, colour)
 }
@@ -23,7 +23,7 @@ pub(super) fn draw_unknown(canvas: &mut dyn Drawable, colour: Colour) {
 
 pub(super) fn draw_char(ch: char, canvas: &mut dyn Drawable, colour: Colour) {
     for tab in font_data::TABLES.iter() {
-        if let Ok(_) = tab.try_draw_glyph(canvas, ch, colour){
+        if tab.try_draw_glyph(canvas, ch, colour).is_ok() {
             return;
         }
     }
