@@ -12,7 +12,7 @@ impl Colour {
         let rr = (r as u16 & 0b11111000) << 8;
         let gg = (g as u16 & 0b11111100) << 3;
         let bb = (b as u16 & 0b11111000) >> 3;
-        return Self(rr|gg|bb);
+        Self(rr|gg|bb)
     }
 
     /// Represent a colour as RGB565

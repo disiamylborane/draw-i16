@@ -1,12 +1,4 @@
-//! Picture: the Picture structure
-
-
-/*
-use crate::alloc::boxed::Box;
-use crate::memorymap::box_arr_special;
-use crate::memorymap::AllocAlgo;
-use crate::memorymap::AllocErr;
-*/
+//! Canvas: a drawable allocated in dynamic memory
 
 use super::{Colour, Drawable, V2};
 

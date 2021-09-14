@@ -12,25 +12,36 @@ use core::cmp::{min, max};
 /// Implement the trait and then use `&mut dyn Drawable` to perform the painting.
 pub trait Drawable {
     /// Get the drawing area size
+    ///
+    /// ### Safety
+    /// Unsafe for compatibility, must be sound
     unsafe fn _size(&self) -> V2;
 
     /// Clear the drawing area
+    ///
+    /// ### Safety
+    /// Unsafe for compatibility, must be sound
     unsafe fn _checked_clear(&mut self, colour: Colour);
 
-    /// Set a pixel colour. The `pos` is guaranteed to be inside the
-    /// rectangle [(0,0), (self._size - (1,1))]
+    /// Set a pixel colour
+    /// ### Safety
+    /// pos is guaranteed to be inside self._size()
     unsafe fn _checked_pixel(&mut self, pos: V2, colour: Colour);
 
     /// Draw a horizontal line of `len` pixels length, starting from the `pos` point
-    /// The line is guaranteed to be inside the rectangle [(0,0), (self._size - (1,1))]
+    /// ### Safety
+    /// The line is guaranteed to be inside the rectangle `[(0,0), (self._size - (1,1))]`
     unsafe fn _checked_hline(&mut self, pos: V2, len: u16, colour: Colour);
 
     /// Draw a vertical line of `len` pixels length, starting from the `pos` point
-    /// The line is guaranteed to be inside the rectangle [(0,0), (self._size - (1,1))]
+    /// ### Safety
+    /// The line is guaranteed to be inside the rectangle `[(0,0), (self._size - (1,1))]`
     unsafe fn _checked_vline(&mut self, pos: V2, len: u16, colour: Colour);
 
-    /// Draw a filled rectangle [`p1`, `p2`]. The points are guaranteed to satisfy:
-    /// * `p1` and `p2` both inside the rectangle [(0,0), (self._size - (1,1))]
+    /// Draw a filled rectangle [`p1`, `p2`]. 
+    /// ### Safety
+    /// The points are guaranteed to satisfy the following:
+    /// * `p1` and `p2` both inside the rectangle `[(0,0), (self._size - (1,1))]`
     /// * `p1.x <= p2.x`
     /// * `p1.y <= p2.y`
     unsafe fn _checked_rect(&mut self, p1: V2, p2: V2, colour: Colour);
