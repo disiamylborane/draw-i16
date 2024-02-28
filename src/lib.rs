@@ -74,7 +74,6 @@ display.text(text, font_size, v2!(size.x/2 - 7*5/2, size.y/2 - 12/2), Colour::WH
 
 #![no_std]
 #![allow(incomplete_features)]
-#![feature(const_panic)]
 #![feature(adt_const_params, generic_const_exprs)]
 #![deny(missing_docs)]
 #![warn(missing_doc_code_examples)]

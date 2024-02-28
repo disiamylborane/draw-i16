@@ -50,7 +50,7 @@ impl GlyphConnectionType {
             _ => unreachable!()
         }
     }
-    const fn to_raw(self) -> u16 {
+    const fn into_raw(self) -> u16 {
         match self {
             Self::Break => 0b000,
             Self::Control => 0b001,
@@ -83,16 +83,16 @@ impl GlyphStep {
                 tp: GlyphConnectionType::from_raw(rtp.u8())}
     }
 
-    pub(super) const fn to_raw(self) -> u16 {
-        let rtp = self.tp.to_raw() as u16;
+    pub(super) const fn into_raw(self) -> u16 {
+        let rtp = self.tp.into_raw();
         let ryv = self.coord.y.u16();
         let rxv = self.coord.x.u16();
         rtp<<9 | ryv<<4 | rxv
     }
 
     pub(super) const fn to_gdata(s1: Self, s2: Self) -> [u8; 3] {
-        let s1 = s1.to_raw();
-        let s2 = s2.to_raw();
+        let s1 = s1.into_raw();
+        let s2 = s2.into_raw();
         [(s1 & 0xFF) as u8, ((s1 & 0xF00) >> 8) as u8 | ((s2 & 0x0F) << 4) as u8,  ((s2 & 0xFF0)>>4) as u8]
     }
 
@@ -173,7 +173,7 @@ impl GlyphData {
 
     fn coords(c: GlyphCoord, glyphsize: V2) -> V2 {
         let xgap = gap_by_xsize(glyphsize.x as u8) as i16;
-        let xglyph = glyphsize.x as i16 - xgap;
+        let xglyph = glyphsize.x - xgap;
         let cx = c.x.i16();
         let x = match cx {
             0 ..= 5 => cx * xglyph/12,

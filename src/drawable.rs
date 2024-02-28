@@ -1,7 +1,7 @@
 //! Drawable module: a set of painting algorithms
 
 use crate::V2;
-use crate::{Colour};
+use crate::Colour;
 use core::cmp::{min, max};
 
 /// A Drawable is an object one can paint something on
@@ -51,29 +51,29 @@ pub trait Drawable {
 /// high-level painting and rasterizing
 pub trait DrawableMethods: Drawable+Sized {
     /// Get drawable size
-    #[inline(always)] fn size(&self) -> V2 { <dyn Drawable>::size(self) }
+    #[inline] fn size(&self) -> V2 { <dyn Drawable>::size(self) }
     /// Fill the whole drawable with a colour
-    #[inline(always)] fn clear(&mut self, colour: Colour) { <dyn Drawable>::clear(self, colour) }
+    #[inline] fn clear(&mut self, colour: Colour) { <dyn Drawable>::clear(self, colour) }
     /// Set a single pixel colour
-    #[inline(always)] fn pixel(&mut self, pos: V2, colour: Colour) { <dyn Drawable>::pixel(self, pos, colour) }
+    #[inline] fn pixel(&mut self, pos: V2, colour: Colour) { <dyn Drawable>::pixel(self, pos, colour) }
     /// Paint a thick pixel (rectangle) at a point
-    #[inline(always)] fn thick_pixel(&mut self, pos: V2, colour: Colour, width: u8) { <dyn Drawable>::thick_pixel(self, pos, colour, width) }
+    #[inline] fn thick_pixel(&mut self, pos: V2, colour: Colour, width: u8) { <dyn Drawable>::thick_pixel(self, pos, colour, width) }
     /// Paint a line
-    #[inline(always)] fn line(&mut self, p1: V2, p2: V2, colour: Colour, width: u8) { <dyn Drawable>::line(self,p1,p2,colour,width) }
+    #[inline] fn line(&mut self, p1: V2, p2: V2, colour: Colour, width: u8) { <dyn Drawable>::line(self,p1,p2,colour,width) }
     /// Paint a rectangle contour
-    #[inline(always)] fn rect(&mut self, p1: V2, p2: V2, colour: Colour) { <dyn Drawable>::rect(self, p1, p2, colour) }
+    #[inline] fn rect(&mut self, p1: V2, p2: V2, colour: Colour) { <dyn Drawable>::rect(self, p1, p2, colour) }
     /// Paint a filled rectangle
-    #[inline(always)] fn rect_fill(&mut self, p1: V2, p2: V2, colour: Colour) { <dyn Drawable>::rect_fill(self, p1, p2, colour) }
+    #[inline] fn rect_fill(&mut self, p1: V2, p2: V2, colour: Colour) { <dyn Drawable>::rect_fill(self, p1, p2, colour) }
     /// Paint a quadratic bezier curve
-    #[inline(always)] fn quad_bezier(&mut self, p0: V2, p1: V2, p2: V2, colour: Colour, width: u8) { 
+    #[inline] fn quad_bezier(&mut self, p0: V2, p1: V2, p2: V2, colour: Colour, width: u8) { 
         <dyn Drawable>::quad_bezier(self, p0, p1, p2, colour, width) 
     }
     /// Paint a glyph
-    #[inline(always)] fn symbol(&mut self, ch: char, fontsize: V2, pos: V2, colour: Colour) {
+    #[inline] fn symbol(&mut self, ch: char, fontsize: V2, pos: V2, colour: Colour) {
         <dyn Drawable>::symbol(self, ch, fontsize, pos, colour) 
     }
     /// Paint text
-    #[inline(always)] fn text(&mut self, s: &str, fontsize: V2, pos: V2, colour: Colour) {
+    #[inline] fn text(&mut self, s: &str, fontsize: V2, pos: V2, colour: Colour) {
         <dyn Drawable>::text(self, s, fontsize, pos, colour) 
     }
 }
@@ -172,12 +172,12 @@ impl<'a> dyn Drawable+'a {
 
         if p1.y == p2.y {
             for y in (p1.y - (width as i16-1)/2)..(p1.y + 1 + (width as i16)/2) {
-                self.horz_line(V2::new(min(p1.x, p2.x), y), (p1.x-p2.x).abs() as u16+1, colour)
+                self.horz_line(V2::new(min(p1.x, p2.x), y), (p1.x-p2.x).unsigned_abs()+1, colour)
             }
         }
         else if p1.x == p2.x {
             for x in (p1.x - (width as i16-1)/2)..(p1.x + 1 + (width as i16)/2) {
-                self.vert_line(V2::new(x, min(p1.y, p2.y)), (p1.y-p2.y).abs() as u16+1, colour)
+                self.vert_line(V2::new(x, min(p1.y, p2.y)), (p1.y-p2.y).unsigned_abs()+1, colour)
             }
         }
         else {
@@ -321,7 +321,7 @@ impl<'a> dyn Drawable+'a {
             let mut dy = 4i32 * seg2_x * cur * (y0-y1) + seg1_y - xy;
             
             seg1_x += seg1_x; seg1_y += seg1_y; 
-            let mut err = dx as i32 + dy as i32 + xy  as i32;
+            let mut err = dx + dy + xy;
 
             while dy < 0 && dx > 0 {
                 self.thick_pixel(V2::new(x0 as i16, y0  as i16), colour, width);
@@ -357,7 +357,7 @@ impl<'a> dyn Drawable+'a {
         let xend_D2 = (D-dy_01)*(D-dy_01)*x0 as i32  +  2*dy_01*(D-dy_01)*x1 as i32  +  dy_01*dy_01*x2 as i32;
 
         let xend = ( (xend_D2 + D*D/2) / (D*D)) as i16;
-        let yend = ( ((y0*y2-y1*y1) as i32 + D/2) / D as i32 ) as i16;
+        let yend = ( ((y0*y2-y1*y1) as i32 + D/2) / D ) as i16;
 
         let xmid_D = (x1-x0) as i32  *  ((y0*y2-y1*y1) as i32 - y0 as i32*D) / (y1-y0) as i32 + x0 as i32 * D;
         let xmid = ((xmid_D + D/2) / D) as i16;
@@ -433,7 +433,7 @@ impl<'a> dyn Drawable+'a {
         for (i,c) in s.chars().enumerate() {
             let posx = pos.x + fontsize.x*i as i16;
             if posx < self.size().x && posx + fontsize.x > 0 {
-                self.symbol(c, fontsize, V2::new(posx as i16, pos.y), colour);
+                self.symbol(c, fontsize, V2::new(posx, pos.y), colour);
             }
         }
     }

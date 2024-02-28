@@ -7,4 +7,4 @@ edition = "2018"
 
 [dependencies]
 
-ranged_integers = "^0.5.1"
+ranged_integers = "^0.8.0"
