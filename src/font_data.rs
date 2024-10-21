@@ -3,6 +3,17 @@
 use super::font::*;
 use ranged_integers::*;
 use GlyphConnectionType::*;
+
+
+/// The main entity containing all the glyph tables.
+// 2298 steps, 415 glyphs, 7724 bytes
+pub static TABLES: [GlyphTable; 4] = [
+    GLYPHS_LATIN,
+    GLYPHS_LATIN_EXTA_UNIMPL,
+    GLYPHS_GREEK,
+    GLYPHS_CYRILLIC,
+];
+
 macro_rules! two_steps {
     ($x1:literal, $y1:literal, $z1:expr; $x2:literal, $y2:literal, $z2:expr) => {
         GlyphStep::to_gdata(
@@ -11,12 +22,7 @@ macro_rules! two_steps {
         )
     };
 }
-pub static TABLES: [GlyphTable; 4] = [
-    GLYPHS_LATIN,
-    GLYPHS_LATIN_EXTA_UNIMPL,
-    GLYPHS_GREEK,
-    GLYPHS_CYRILLIC,
-];
+
 pub const GLYPHS_LATIN : GlyphTable = GlyphTable {
     basechar: ' ',
     addr: &[0, 1, 5, 9, 17, 28, 44, 52, 54, 57, 60, 66, 70, 73, 75, 77, 79, 90, 93, 100, 108, 112, 118, 127, 129, 144, 153, 157, 161, 164, 168, 171, 180, 194, 199, 208, 213, 218, 223, 227, 234, 239, 245, 249, 253, 255, 259, 262, 271, 276, 287, 293, 302, 305, 310, 312, 316, 319, 322, 325, 329, 331, 335, 338, 340, 342, 352, 357, 362, 368, 377, 382, 390, 395, 399, 405, 409, 412, 420, 425, 434, 440, 446, 450, 459, 464, 468, 471, 476, 480, 488, 492, 501, 503, 512],
@@ -1187,8 +1193,10 @@ pub const GLYPHS_CYRILLIC : GlyphTable = GlyphTable {
         two_steps!(7, 6, Outline { thick: true, update: true }; 3, 4, Recall),
         two_steps!(2, 0, Control; 4, 6, Break),
         two_steps!(6, 9, Control; 8, 6, Outline { thick: true, update: true }),
-        two_steps!(0, 23, Outline { thick: false, update: true }; 6, 23, Outline { thick: false, update: true }),
-        two_steps!(6, 27, Outline { thick: false, update: false }; 12, 23, Outline { thick: false, update: true }),
-        two_steps!(12, 1, Outline { thick: false, update: false }; 0, 0, Break),
+        two_steps!(0, 7, Break; 0, 23, Outline { thick: false, update: true }),
+        two_steps!(6, 23, Outline { thick: false, update: true }; 6, 27, Outline { thick: false, update: false }),
+        two_steps!(12, 23, Outline { thick: false, update: true }; 12, 7, Outline { thick: false, update: false }),
+        two_steps!(0, 0, Break; 0, 0, Break),
     ]
 };
+

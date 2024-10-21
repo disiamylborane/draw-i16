@@ -8,21 +8,19 @@ use crate::{font_data, font::GlyphTable};
 
 use core::cmp::{min, max};
 
-
 /// A Drawable is an object one can paint something on
 ///
 /// The trait consists of basic drawing functions including setting pixels,
-/// horizontal/vertical lines and filled rectangle. It also reports the size.
+/// horizontal/vertical lines and filled rectangle. It also has the size, and
+/// accepts to draw any pixel in the range between 0,0 (inclusively) and the
+/// size it has (exclusively).
 ///
 /// Implement the trait and then use `&mut dyn Drawable` to perform the painting.
 pub trait Drawable<Colour:Copy> {
     /// Get the drawing area size
     fn _size(&self) -> V2;
 
-    /// Clear the drawing area
-    ///
-    /// ### Safety
-    /// Unsafe for compatibility, must be sound
+    /// Paint the whole drawing area with a `colour`
     fn _clear(&mut self, colour: Colour);
 
     /// Set a pixel colour
@@ -72,16 +70,22 @@ pub trait Drawable<Colour:Copy> {
 pub trait DrawableMethods<Colour:Copy>: Drawable<Colour>+Sized {
     /// Get drawable size
     #[inline] fn size(&self) -> V2 { <dyn Drawable<Colour>>::size(self) }
+
     /// Fill the whole drawable with a colour
     #[inline] fn clear(&mut self, colour: Colour) { <dyn Drawable<Colour>>::clear(self, colour) }
+
     /// Set a single pixel colour
     #[inline] fn pixel(&mut self, pos: V2, colour: Colour) { <dyn Drawable<Colour>>::pixel(self, pos, colour) }
+
     /// Paint a thick pixel (rectangle) at a point
     #[inline] fn thick_pixel(&mut self, pos: V2, colour: Colour, width: u8) { <dyn Drawable<Colour>>::thick_pixel(self, pos, colour, width) }
+
     /// Paint a line
     #[inline] fn line(&mut self, p1: V2, p2: V2, colour: Colour, width: u8) { <dyn Drawable<Colour>>::line(self,p1,p2,colour,width) }
+
     /// Paint a rectangle contour
     #[inline] fn rect(&mut self, p1: V2, p2: V2, colour: Colour) { <dyn Drawable<Colour>>::rect(self, p1, p2, colour) }
+
     /// Paint a filled rectangle
     #[inline] fn rect_fill(&mut self, p1: V2, p2: V2, colour: Colour) { <dyn Drawable<Colour>>::rect_fill(self, p1, p2, colour) }
 
@@ -90,27 +94,46 @@ pub trait DrawableMethods<Colour:Copy>: Drawable<Colour>+Sized {
         <dyn Drawable<Colour>>::ellipse_at_center(self, center, radii, colour)
     }
 
-    /// Paint an ellipse contour by the bounding rectangle
+    /// Paint an ellipse contour by the corner points of the bounding rectangle
     #[inline] fn ellipse_at_rect(&mut self, p1: V2, p2: V2, colour: Colour) {
         <dyn Drawable<Colour>>::ellipse_at_rect(self, p1, p2, colour)
     }
 
     /// Paint a quadratic bezier curve
+    /// 
+    /// `p0` and `p2` for line endings, p1 as control point
     #[inline] fn quad_bezier(&mut self, p0: V2, p1: V2, p2: V2, colour: Colour, width: u8) {
         <dyn Drawable<Colour>>::quad_bezier(self, p0, p1, p2, colour, width)
     }
 
-    /// Paint a glyph using the user-defined char code to glyph converter
+    /// Paint a glyph using the user-defined char code to glyph converter.
+    /// 
+    /// * `tables` - the code-to-glyph steps converter (see [`GlyphProvider`])
+    /// * `ch` - char to display
+    /// * `fontsize` - size of one char (consider using [fontsize_to_glyphsize](crate::font::fontsize_to_glyphsize) output)
+    /// * `pos` - location of top left corner of the character
+    /// * `colour` - parameter to draw the symbol pixels with
     #[inline] fn symbol_with_provider<G:GlyphProvider>(&mut self, tables: G, ch: char, fontsize: V2, pos: V2, colour: Colour) {
         <dyn Drawable<Colour>>::symbol_with_provider(self, tables, ch, fontsize, pos, colour)
     }
 
     /// Paint a line of text using the user-defined char code to glyph converter
+    /// 
+    /// * `tables` - the code-to-glyph steps converter (see [`GlyphProvider`])
+    /// * `s` - string to display
+    /// * `fontsize` - size of one char (consider using [fontsize_to_glyphsize](crate::font::fontsize_to_glyphsize) output)
+    /// * `pos` - location of top left corner of the character
+    /// * `colour` - parameter to draw the symbol pixels with
     #[inline] fn text_with_provider<G:GlyphProvider>(&mut self, tables: G, s: &str, fontsize: V2, pos: V2, colour: Colour) {
         <dyn Drawable<Colour>>::text_with_provider(self, tables, s, fontsize, pos, colour)
     }
 
-    /// Paint a glyph using the builtin glyph mapper
+    /// Paint a glyph using the builtin font
+    /// 
+    /// * `tables` - the code-to-glyph steps converter (see [`GlyphProvider`])
+    /// * `ch` - char to display
+    /// * `pos` - location of top left corner of the character
+    /// * `colour` - parameter to draw the symbol pixels with
     #[cfg(any(feature="font_data", doc))]
     #[doc(cfg(feature="font_data"))]
     #[inline]
@@ -118,7 +141,12 @@ pub trait DrawableMethods<Colour:Copy>: Drawable<Colour>+Sized {
         <dyn Drawable<Colour>>::symbol(self, ch, fontsize, pos, colour)
     }
 
-    /// Paint a line of text using the builtin glyph mapper
+    /// Paint a line of text using the builtin font
+    /// 
+    /// * `tables` - the code-to-glyph steps converter (see [`GlyphProvider`])
+    /// * `s` - string to display
+    /// * `pos` - location of top left corner of the character
+    /// * `colour` - parameter to draw the symbol pixels with
     #[cfg(any(feature="font_data", doc))]
     #[doc(cfg(feature="font_data"))]
     #[inline]
@@ -417,11 +445,11 @@ impl<Colour:Copy> dyn Drawable<Colour>+'_ {
 
 
     /// Pixelize and draw a quadratic bezier curve
-    ///
-    /// Adopted from [Zingl Alois] [http://members.chello.at/easyfilter/bresenham.html](http://members.chello.at/easyfilter/bresenham.html)
     #[allow(non_snake_case)]
     pub fn quad_bezier(&mut self, p0: V2, p1: V2, p2: V2, colour: Colour, width: u8)
     {
+        // The algorithm is taken from [Zingl Alois] [http://members.chello.at/easyfilter/bresenham.html](http://members.chello.at/easyfilter/bresenham.html)
+
         let (x0, x1, x2, y0, y1, y2) = (p0.x, p1.x, p2.x, p0.y, p1.y, p2.y);
 
         if (x0-x1) as i32 * (x2-x1) as i32 > 0 {
