@@ -1,108 +1,153 @@
-//! Drawable module: a set of painting algorithms
+//! A bunch of rasterizing algorithms
 
-use crate::V2;
-use crate::Colour;
+use crate::font::GlyphProvider;
+use crate::{V2, v2};
+
+#[cfg(any(feature="font_data", doc))]
+use crate::{font_data, font::GlyphTable};
+
 use core::cmp::{min, max};
 
+
 /// A Drawable is an object one can paint something on
-/// 
-/// The trait consists of basic drawing functions including setting pixels, 
+///
+/// The trait consists of basic drawing functions including setting pixels,
 /// horizontal/vertical lines and filled rectangle. It also reports the size.
-/// 
+///
 /// Implement the trait and then use `&mut dyn Drawable` to perform the painting.
-pub trait Drawable {
+pub trait Drawable<Colour:Copy> {
     /// Get the drawing area size
-    ///
-    /// ### Safety
-    /// Unsafe for compatibility, must be sound
-    unsafe fn _size(&self) -> V2;
+    fn _size(&self) -> V2;
 
     /// Clear the drawing area
     ///
     /// ### Safety
     /// Unsafe for compatibility, must be sound
-    unsafe fn _checked_clear(&mut self, colour: Colour);
+    fn _clear(&mut self, colour: Colour);
 
     /// Set a pixel colour
+    ///
     /// ### Safety
     /// pos is guaranteed to be inside self._size()
-    unsafe fn _checked_pixel(&mut self, pos: V2, colour: Colour);
+    unsafe fn _pixel(&mut self, pos: V2, colour: Colour);
 
     /// Draw a horizontal line of `len` pixels length, starting from the `pos` point
+    ///
     /// ### Safety
-    /// The line is guaranteed to be inside the rectangle `[(0,0), (self._size - (1,1))]`
-    unsafe fn _checked_hline(&mut self, pos: V2, len: u16, colour: Colour);
+    /// The line must be inside the rectangle `[(0,0), (self._size - (1,1))]`
+    unsafe fn _hline(&mut self, pos: V2, len: u16, colour: Colour){
+        for x in pos.x..(pos.x+len as i16) {
+            self._pixel(v2(x, pos.y), colour);
+        }
+    }
 
     /// Draw a vertical line of `len` pixels length, starting from the `pos` point
+    ///
     /// ### Safety
-    /// The line is guaranteed to be inside the rectangle `[(0,0), (self._size - (1,1))]`
-    unsafe fn _checked_vline(&mut self, pos: V2, len: u16, colour: Colour);
+    /// The line must be inside the rectangle `[(0,0), (self._size - (1,1))]`
+    unsafe fn _vline(&mut self, pos: V2, len: u16, colour: Colour) {
+        for y in pos.y..(pos.y+len as i16) {
+            self._pixel(v2(pos.x, y), colour);
+        }
+    }
 
-    /// Draw a filled rectangle [`p1`, `p2`]. 
+    /// Draw a filled rectangle [`p1`, `p2`].
+    ///
     /// ### Safety
     /// The points are guaranteed to satisfy the following:
     /// * `p1` and `p2` both inside the rectangle `[(0,0), (self._size - (1,1))]`
     /// * `p1.x <= p2.x`
     /// * `p1.y <= p2.y`
-    unsafe fn _checked_rect(&mut self, p1: V2, p2: V2, colour: Colour);
+    unsafe fn _rect(&mut self, p1: V2, p2: V2, colour: Colour){
+        for x in p1.x..(p2.x+1) {
+            for y in p1.y..(p2.y+1) {
+                self._pixel(v2(x,y), colour);
+            }
+        }
+    }
 }
 
-/// A middleware extension for `Drawable`s, allowing 
+/// A middleware extension for [`Drawable`]s, allowing
 /// high-level painting and rasterizing
-pub trait DrawableMethods: Drawable+Sized {
+pub trait DrawableMethods<Colour:Copy>: Drawable<Colour>+Sized {
     /// Get drawable size
-    #[inline] fn size(&self) -> V2 { <dyn Drawable>::size(self) }
+    #[inline] fn size(&self) -> V2 { <dyn Drawable<Colour>>::size(self) }
     /// Fill the whole drawable with a colour
-    #[inline] fn clear(&mut self, colour: Colour) { <dyn Drawable>::clear(self, colour) }
+    #[inline] fn clear(&mut self, colour: Colour) { <dyn Drawable<Colour>>::clear(self, colour) }
     /// Set a single pixel colour
-    #[inline] fn pixel(&mut self, pos: V2, colour: Colour) { <dyn Drawable>::pixel(self, pos, colour) }
+    #[inline] fn pixel(&mut self, pos: V2, colour: Colour) { <dyn Drawable<Colour>>::pixel(self, pos, colour) }
     /// Paint a thick pixel (rectangle) at a point
-    #[inline] fn thick_pixel(&mut self, pos: V2, colour: Colour, width: u8) { <dyn Drawable>::thick_pixel(self, pos, colour, width) }
+    #[inline] fn thick_pixel(&mut self, pos: V2, colour: Colour, width: u8) { <dyn Drawable<Colour>>::thick_pixel(self, pos, colour, width) }
     /// Paint a line
-    #[inline] fn line(&mut self, p1: V2, p2: V2, colour: Colour, width: u8) { <dyn Drawable>::line(self,p1,p2,colour,width) }
+    #[inline] fn line(&mut self, p1: V2, p2: V2, colour: Colour, width: u8) { <dyn Drawable<Colour>>::line(self,p1,p2,colour,width) }
     /// Paint a rectangle contour
-    #[inline] fn rect(&mut self, p1: V2, p2: V2, colour: Colour) { <dyn Drawable>::rect(self, p1, p2, colour) }
+    #[inline] fn rect(&mut self, p1: V2, p2: V2, colour: Colour) { <dyn Drawable<Colour>>::rect(self, p1, p2, colour) }
     /// Paint a filled rectangle
-    #[inline] fn rect_fill(&mut self, p1: V2, p2: V2, colour: Colour) { <dyn Drawable>::rect_fill(self, p1, p2, colour) }
+    #[inline] fn rect_fill(&mut self, p1: V2, p2: V2, colour: Colour) { <dyn Drawable<Colour>>::rect_fill(self, p1, p2, colour) }
+
+    /// Paint an ellipse contour by center and horizontal/vertical radius
+    #[inline] fn ellipse_at_center(&mut self, center: V2, radii: (i16, i16), colour: Colour) {
+        <dyn Drawable<Colour>>::ellipse_at_center(self, center, radii, colour)
+    }
+
+    /// Paint an ellipse contour by the bounding rectangle
+    #[inline] fn ellipse_at_rect(&mut self, p1: V2, p2: V2, colour: Colour) {
+        <dyn Drawable<Colour>>::ellipse_at_rect(self, p1, p2, colour)
+    }
+
     /// Paint a quadratic bezier curve
-    #[inline] fn quad_bezier(&mut self, p0: V2, p1: V2, p2: V2, colour: Colour, width: u8) { 
-        <dyn Drawable>::quad_bezier(self, p0, p1, p2, colour, width) 
+    #[inline] fn quad_bezier(&mut self, p0: V2, p1: V2, p2: V2, colour: Colour, width: u8) {
+        <dyn Drawable<Colour>>::quad_bezier(self, p0, p1, p2, colour, width)
     }
-    /// Paint a glyph
-    #[inline] fn symbol(&mut self, ch: char, fontsize: V2, pos: V2, colour: Colour) {
-        <dyn Drawable>::symbol(self, ch, fontsize, pos, colour) 
+
+    /// Paint a glyph using the user-defined char code to glyph converter
+    #[inline] fn symbol_with_provider<G:GlyphProvider>(&mut self, tables: G, ch: char, fontsize: V2, pos: V2, colour: Colour) {
+        <dyn Drawable<Colour>>::symbol_with_provider(self, tables, ch, fontsize, pos, colour)
     }
-    /// Paint text
-    #[inline] fn text(&mut self, s: &str, fontsize: V2, pos: V2, colour: Colour) {
-        <dyn Drawable>::text(self, s, fontsize, pos, colour) 
+
+    /// Paint a line of text using the user-defined char code to glyph converter
+    #[inline] fn text_with_provider<G:GlyphProvider>(&mut self, tables: G, s: &str, fontsize: V2, pos: V2, colour: Colour) {
+        <dyn Drawable<Colour>>::text_with_provider(self, tables, s, fontsize, pos, colour)
+    }
+
+    /// Paint a glyph using the builtin glyph mapper
+    #[cfg(any(feature="font_data", doc))]
+    #[doc(cfg(feature="font_data"))]
+    #[inline]
+    fn symbol(&mut self, ch: char, fontsize: V2, pos: V2, colour: Colour) {
+        <dyn Drawable<Colour>>::symbol(self, ch, fontsize, pos, colour)
+    }
+
+    /// Paint a line of text using the builtin glyph mapper
+    #[cfg(any(feature="font_data", doc))]
+    #[doc(cfg(feature="font_data"))]
+    #[inline]
+    fn text(&mut self, s: &str, fontsize: V2, pos: V2, colour: Colour) {
+        <dyn Drawable<Colour>>::text(self, s, fontsize, pos, colour)
     }
 }
 
-impl<T> DrawableMethods for T where T: Drawable {}
+impl<T, Colour:Copy> DrawableMethods<Colour> for T where T: Drawable<Colour> {}
 
-impl<'a> dyn Drawable+'a {
+impl<Colour:Copy> dyn Drawable<Colour>+'_ {
     /// Get a drawable size
-    pub fn size(&self) -> V2 { unsafe{self._size()} }
+    pub fn size(&self) -> V2 { self._size() }
 
     /// Fill the whole canvas with a signle colour
-    pub fn clear(&mut self, colour: Colour) { 
-        unsafe {
-            self._checked_clear(colour)
-        } 
-    }
+    pub fn clear(&mut self, colour: Colour) { self._clear(colour) }
 
     /// Draw a pixel, if inside the canvas
     /// Does nothing, if outside
     pub fn pixel(&mut self, pos: V2, colour: Colour) {
         let size = self.size();
-        
-        if pos.x >= size.x || pos.y >= size.y 
+
+        if pos.x >= size.x || pos.y >= size.y
             {return;}
         if pos.x < 0 || pos.y < 0
             {return;}
 
         unsafe{
-            self._checked_pixel(pos, colour);
+            self._pixel(pos, colour);
         }
     }
 
@@ -125,7 +170,7 @@ impl<'a> dyn Drawable+'a {
 
         if pos.y >= size.y || pos.y < 0
             {return;}
-        
+
         if pos.x < 0 {
             if -pos.x > len {return;}
             len -= -pos.x;
@@ -137,7 +182,7 @@ impl<'a> dyn Drawable+'a {
         }
 
         unsafe {
-            self._checked_hline(pos, len as u16, colour);
+            self._hline(pos, len as u16, colour);
         }
     }
 
@@ -150,7 +195,7 @@ impl<'a> dyn Drawable+'a {
 
         if npos.x >= size.x || npos.x < 0
             {return;}
-        
+
         if npos.y < 0 {
             if -npos.y > nlen {return;}
             nlen -= -npos.y;
@@ -162,7 +207,7 @@ impl<'a> dyn Drawable+'a {
         }
 
         unsafe {
-            self._checked_vline(npos, nlen as u16, colour);
+            self._vline(npos, nlen as u16, colour);
         }
     }
 
@@ -274,15 +319,15 @@ impl<'a> dyn Drawable+'a {
         if y2 >= size.y {y2 = size.y-1;}
 
         unsafe {
-            self._checked_rect(V2::new(x1, y1), V2::new(x2, y2), colour);
+            self._rect(V2::new(x1, y1), V2::new(x2, y2), colour);
         }
     }
 
     // Adopted from [Zingl Alois] http://members.chello.at/easyfilter/bresenham.html
     // plot a limited quadratic Bezier segment
     fn quad_bezier_segment(&mut self, p0: V2, p1: V2, p2: V2, colour: Colour, width: u8)
-    {                                  
-        let (mut x0, x1, mut x2, mut y0, mut y1, mut y2) = 
+    {
+        let (mut x0, x1, mut x2, mut y0, mut y1, mut y2) =
                     (p0.x as i32, p1.x as i32, p2.x as i32, p0.y as i32, p1.y as i32, p2.y as i32);
 
         let mut seg2_x = x2-x1;
@@ -290,54 +335,54 @@ impl<'a> dyn Drawable+'a {
         let mut seg1_x = x0-x1;
         let mut seg1_y = y0-y1;
         let mut cur = seg1_x*seg2_y-seg1_y*seg2_x;
-        
+
         assert!(seg1_x*seg2_x <= 0 && seg1_y*seg2_y <= 0);
 
         if seg2_x*seg2_x+seg2_y*seg2_y > seg1_x*seg1_x+seg1_y*seg1_y {
-            x2 = x0; 
-            x0 = seg2_x+x1; 
-            y2 = y0; 
-            y0 = seg2_y+y1; 
+            x2 = x0;
+            x0 = seg2_x+x1;
+            y2 = y0;
+            y0 = seg2_y+y1;
             cur = -cur;
         }
         if cur != 0 {
-            seg1_x += seg2_x; 
+            seg1_x += seg2_x;
             seg2_x = if x0 < x2 {1} else {-1};
             seg1_x *= seg2_x;
-            
-            seg1_y += seg2_y; 
+
+            seg1_y += seg2_y;
             seg2_y = if y0 < y2 {1} else {-1};
             seg1_y *= seg2_y;
-            
-            let mut xy = 2*seg1_x*seg1_y; 
-            seg1_x *= seg1_x; 
+
+            let mut xy = 2*seg1_x*seg1_y;
+            seg1_x *= seg1_x;
             seg1_y *= seg1_y;
-            
+
             if cur*seg2_x*seg2_y < 0 {
                 seg1_x = -seg1_x; seg1_y = -seg1_y; xy = -xy; cur = -cur;
             }
-            
+
             let mut dx = 4i32 * seg2_y * cur * (x1-x0) + seg1_x - xy;
             let mut dy = 4i32 * seg2_x * cur * (y0-y1) + seg1_y - xy;
-            
-            seg1_x += seg1_x; seg1_y += seg1_y; 
+
+            seg1_x += seg1_x; seg1_y += seg1_y;
             let mut err = dx + dy + xy;
 
             while dy < 0 && dx > 0 {
                 self.thick_pixel(V2::new(x0 as i16, y0  as i16), colour, width);
                 if x0 == x2 && y0 == y2 {return;}
                 y1 = (2*err < dx) as i32;
-                if 2*err > dy { 
+                if 2*err > dy {
                     x0 += seg2_x;
                     dx -= xy;
                     dy += seg1_y;
                     err += dy;
                 }
-                if y1 != 0 { 
-                    y0 += seg2_y; 
-                    dy -= xy; 
-                    dx += seg1_x; 
-                    err += dx; 
+                if y1 != 0 {
+                    y0 += seg2_y;
+                    dy -= xy;
+                    dx += seg1_x;
+                    err += dx;
                 }
             }
         }
@@ -349,30 +394,30 @@ impl<'a> dyn Drawable+'a {
     #[allow(non_snake_case)]
     fn _second_segm(&mut self, p0: V2, p1: V2, p2: V2, colour: Colour, width: u8)
     {
-        let (x0, x1, x2, y0, y1, y2) = (p0.x, p1.x, p2.x, p0.y, p1.y, p2.y);
+        let (x0, x1, x2, y0, y1, y2) = (p0.x as i32, p1.x as i32, p2.x as i32, p0.y as i32, p1.y as i32, p2.y as i32);
 
-        let dy_01 = (y0-y1) as i32;
-        let D = (y0-2*y1+y2) as i32;
+        let dy_01 = y0-y1;
+        let D = y0-2*y1+y2;
 
-        let xend_D2 = (D-dy_01)*(D-dy_01)*x0 as i32  +  2*dy_01*(D-dy_01)*x1 as i32  +  dy_01*dy_01*x2 as i32;
+        let xend_D2 = (D-dy_01)*(D-dy_01)*x0  +  2*dy_01*(D-dy_01)*x1  +  dy_01*dy_01*x2;
 
         let xend = ( (xend_D2 + D*D/2) / (D*D)) as i16;
-        let yend = ( ((y0*y2-y1*y1) as i32 + D/2) / D ) as i16;
+        let yend = ( ((y0*y2-y1*y1) + D/2) / D ) as i16;
 
-        let xmid_D = (x1-x0) as i32  *  ((y0*y2-y1*y1) as i32 - y0 as i32*D) / (y1-y0) as i32 + x0 as i32 * D;
+        let xmid_D = (x1-x0)  *  ((y0*y2-y1*y1) - y0*D) / (y1-y0) + x0 * D;
         let xmid = ((xmid_D + D/2) / D) as i16;
 
-        self.quad_bezier_segment(V2::new(x0,y0), V2::new(xmid, yend), V2::new(xend,yend), colour, width);
+        self.quad_bezier_segment(V2::new(x0 as i16,y0 as i16), V2::new(xmid, yend), V2::new(xend,yend), colour, width);
 
-        let xdir_D = (x1-x2) as i32  *  ((y0*y2-y1*y1) as i32 - y2 as i32*D) / (y1-y2) as i32 + x2 as i32 * D;
+        let xdir_D = (x1-x2)  *  ((y0*y2-y1*y1) - y2*D) / (y1-y2) + x2 * D;
         let xdir = ((xdir_D + D/2) / D) as i16;
 
-        self.quad_bezier_segment(V2::new(xend, yend), V2::new(xdir,yend), V2::new(x2,y2), colour, width);
+        self.quad_bezier_segment(V2::new(xend, yend), V2::new(xdir,yend), V2::new(x2 as i16,y2 as i16), colour, width);
     }
 
 
     /// Pixelize and draw a quadratic bezier curve
-    /// 
+    ///
     /// Adopted from [Zingl Alois] [http://members.chello.at/easyfilter/bresenham.html](http://members.chello.at/easyfilter/bresenham.html)
     #[allow(non_snake_case)]
     pub fn quad_bezier(&mut self, p0: V2, p1: V2, p2: V2, colour: Colour, width: u8)
@@ -381,8 +426,8 @@ impl<'a> dyn Drawable+'a {
 
         if (x0-x1) as i32 * (x2-x1) as i32 > 0 {
 
-            let (x0,y0,x2,y2) = 
-                if (y0-y1) as i32 * (y2-y1) as i32 > 0 && 
+            let (x0,y0,x2,y2) =
+                if (y0-y1) as i32 * (y2-y1) as i32 > 0 &&
                    ((y0-2*y1+y2) as i32 * (x0-x1) as i32).abs() > ((y0-y1) as i32 * ((x0 - 2 * x1 + x2) as i32)).abs()
                 {
                     (x2,y2,x0,y0)
@@ -397,7 +442,7 @@ impl<'a> dyn Drawable+'a {
             let yend_D2 = (D-dx_01)*(D-dx_01)*y0 as i32  +  2*(D-dx_01)*dx_01*y1 as i32  +  dx_01*dx_01*y2 as i32;
             let yend = ((yend_D2 + D*D/2) / (D*D)) as i16;
             let xend = (((x0*x2-x1*x1) as i32 + D/2) / D) as i16;
- 
+
             let ymid_D = (y1-y0) as i32 * ((x0*x2-x1*x1) as i32 - x0 as i32*D) / (x1-x0) as i32 + y0 as i32*D;
             let ymid = ((ymid_D+D/2)/D) as i16;
 
@@ -421,13 +466,94 @@ impl<'a> dyn Drawable+'a {
         }
     }
 
+    /// Draw an ellipse contour by center and horizontal/vertical radii
+    pub fn ellipse_at_center(&mut self, V2 { x:xm, y:ym }: V2, (a, b): (i16, i16), colour: Colour) {
+        let mut set_pixel = |x: i32, y: i32| {self.pixel(v2(x as i16, y as i16), colour);};
 
+        let mut x = -a as i32;
+        let mut y = 0;
+        let mut dx = (1+2*x)*b as i32*b as i32;
+        let mut dy = x*x;
+        let mut err = dx+dy;
+        loop {
+            set_pixel(xm as i32-x, ym as i32+y); /* I. Quadrant */
+            set_pixel(xm as i32+x, ym as i32+y); /* II. Quadrant */
+            set_pixel(xm as i32+x, ym as i32-y); /* III. Quadrant */
+            set_pixel(xm as i32-x, ym as i32-y); /* IV. Quadrant */
+            let e2 = 2*err;
+            if e2 >= dx {
+                x+=1;
+                dx += 2*b as i32*b as i32;
+                err += dx;
+            }
+            if e2 <= dy {
+                y+=1;
+                dy += 2*a as i32*a as i32;
+                err += dy;
+            }
+            if x > 0 {
+                break;
+            }
+        }
+
+        while y < b as i32 { /* to early stop for flat ellipses with a=1, */
+            y += 1;
+            set_pixel(xm as i32, ym as i32+y); /* -> finish tip of ellipse */
+            set_pixel(xm as i32, ym as i32-y);
+        }
+    }
+
+    /// Draw an ellipse contour inside a specified rect
+    pub fn ellipse_at_rect(&mut self, V2 { x:mut x0, y: mut y0 }: V2, V2 { x:mut x1, y:mut y1 }: V2, colour: Colour) {
+        let mut set_pixel = |x: i16, y: i16| {self.pixel(v2(x, y), colour);};
+
+        let a = (x1-x0).abs();
+        let b = (y1-y0).abs();
+        let b1 = b & 1;
+        let mut dx = 4 * (1-a as i32) * b as i32 * b as i32;
+        let mut dy = 4 * (b1 as i32 + 1) * a as i32 * a as i32;
+        let mut err = dx+dy+b1 as i32*a as i32*a as i32;
+        let mut e2;
+
+        if x0 > x1 { x0 = x1; x1 += a; }
+        if y0 > y1 { y0 = y1; }
+        y0 += (b+1)/2;
+        y1 = y0-b1;
+        let a = 8*a as i32*a as i32;
+        let b1 = 8*b as i32*b as i32;
+        loop {
+            set_pixel(x1, y0);
+            set_pixel(x0, y0);
+            set_pixel(x0, y1);
+            set_pixel(x1, y1);
+            e2 = 2*err;
+            if e2 <= dy { y0+=1; y1-=1; dy += a; err += dy; }
+            if e2 >= dx || 2*err > dy { x0+=1; x1-=1; dx += b1; err += dx;}
+            if x0 > x1 {
+                break;
+            }
+        }
+
+        while y0-y1 <= b {
+            set_pixel(x0-1, y0);
+            set_pixel(x1+1, y0);
+            y0 += 1;
+            set_pixel(x0-1, y1);
+            set_pixel(x1+1, y1);
+            y1 -= 1;
+        }
+    }
+
+    #[cfg(any(feature="font_data", doc))]
+    #[doc(cfg(feature="font_data"))]
     /// Generate and render a symbol
     pub fn symbol(&mut self, ch: char, fontsize: V2, pos: V2, colour: Colour) {
         let mut sten = crate::helpers::Stencil::new(self, pos, fontsize);
-        crate::font::draw_char(ch, &mut sten, colour);
+        crate::font::draw_char(ch as u32, &font_data::TABLES as &[GlyphTable], &mut sten, colour);
     }
 
+    #[cfg(any(feature="font_data", doc))]
+    #[doc(cfg(feature="font_data"))]
     /// Generate and render a char sequence
     pub fn text(&mut self, s: &str, fontsize: V2, pos: V2, colour: Colour) {
         for (i,c) in s.chars().enumerate() {
@@ -437,4 +563,73 @@ impl<'a> dyn Drawable+'a {
             }
         }
     }
+
+    /// Generate and render a text with the user-defined steps
+    pub fn text_with_provider(&mut self, tables: impl crate::font::GlyphProvider, s: &str, fontsize: V2, pos: V2, colour: Colour) {
+        for (i,c) in s.chars().enumerate() {
+            let posx = pos.x + fontsize.x*i as i16;
+            if posx < self.size().x && posx + fontsize.x > 0 {
+                self.symbol_with_provider(tables, c, fontsize, V2::new(posx, pos.y), colour);
+            }
+        }
+    }
+
+    /// Generate and render a symbol with the user-defined steps
+    pub fn symbol_with_provider(&mut self, tables: impl crate::font::GlyphProvider, ch: char, fontsize: V2, pos: V2, colour: Colour) {
+        let mut sten = crate::helpers::Stencil::new(self, pos, fontsize);
+        crate::font::draw_char(ch as u32, tables, &mut sten, colour);
+    }
+}
+
+
+#[cfg(test)]
+pub(crate) fn canvas_to_string(cvs: &crate::canvas::Canvas<u8>) -> std::string::String {
+    use std::fmt::Write;
+    let sz = cvs.size();
+    let mut s = std::string::String::new();
+    for r in 0..sz.y {
+        write!(s, "|").unwrap();
+        for c in 0..sz.x {
+            write!(s, "{} ", cvs.get_pixel(v2(c,r)).unwrap_or(b'?') as char).unwrap();
+        }
+        writeln!(s, "|").unwrap();
+    }
+    s
+}
+
+
+#[test]
+fn test_ellipse() {
+    const SIZE: i16 = 20;
+
+    let mut buffer = [b' '; SIZE as usize * SIZE as usize];
+    let mut canvas = crate::canvas::Canvas::<u8>::new(&mut buffer, v2(SIZE, SIZE)).unwrap();
+    let c : &mut dyn Drawable<u8> = &mut canvas;
+
+    c.ellipse_at_center(V2 { x: 10, y: 10 }, (5, 8), b'.');
+    c.ellipse_at_rect(V2 { x: 1, y: 1 }, V2 { x: 15, y: 10 }, b'o');
+
+    assert_eq!(canvas_to_string(&canvas).trim(),
+"
+|                                        |
+|          o o o o o o o                 |
+|      o o         . . . o o             |
+|    o           .       .   o           |
+|  o           .           .   o         |
+|  o         .               . o         |
+|  o         .               . o         |
+|  o       .                   o         |
+|    o     .                 o .         |
+|      o o .             o o   .         |
+|          o o o o o o o       .         |
+|          .                   .         |
+|          .                   .         |
+|          .                   .         |
+|            .               .           |
+|            .               .           |
+|              .           .             |
+|                .       .               |
+|                  . . .                 |
+|                                        |
+".trim());
 }

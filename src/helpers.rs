@@ -1,46 +1,61 @@
 //! helpers: the reference-like wrappers for drawables manipulation
 
-use super::{Colour, Drawable, V2};
+use super::{Drawable, V2, v2};
 
-/// Stencil is a 2D-reference-like type for `Drawable`.
-/// Stencil points to a window of some Drawable. Using the stencil,
+/// A 2D-reference-like type for `Drawable`, which
+/// points to a window of some Drawable. Using the stencil,
 /// one can't draw outside its size
-/// 
+///
+/// ```text
+/// Original -> Apply Stencil  ->  Draw on  ->  Result on original
+/// drawable    origin: (1,0)      Stencil      is moved
+///             size: (2,2)
+///
+/// |o....|         |..|            |a.|          |oa...|
+/// |.o...|         |o.|            |ob|          |.ob..|
+/// ```
+///
 /// # Example
 /// ```
-/// let mut stencil = Stencil::new(&lcd, v2![20,20], v2![10,20]);  // A vertical 10x20 window on lcd
-/// stencil.pixel(v2![5,10], Colour::YELLOW);  // A yellow pixel
-/// stencil.pixel(v2![20,10], Colour::YELLOW);  // No effect
+/// # use draw_i16::*; use core::str;
+/// let mut buffer = [b'.'; 2*5];
+/// let mut canvas = Canvas::new(&mut buffer, v2(5,2)).unwrap();
+/// canvas.pixel(v2(0, 0), b'o');
+/// canvas.pixel(v2(1, 1), b'o');
+/// let mut stencil = Stencil::new(&mut canvas, v2(1,0), v2(2,2) );
+/// stencil.pixel(v2(0, 0), b'a');
+/// stencil.pixel(v2(1, 1), b'b');
+/// assert_eq!(str::from_utf8(&buffer).unwrap(), "oa....ob..");
 /// ```
-pub struct Stencil<'a> {
-    child: &'a mut dyn Drawable,
+pub struct Stencil<'a, Colour:Copy> {
+    child: &'a mut dyn Drawable<Colour>,
     origin: V2,
     size: V2
 }
 
-impl<'a> Stencil<'a> {
+impl<'a, Colour:Copy> Stencil<'a, Colour> {
     /// Create a new `Stencil`
-    pub fn new(child: &'a mut dyn Drawable, origin: V2, size: V2)->Self {
+    pub fn new(child: &'a mut dyn Drawable<Colour>, origin: V2, size: V2)->Self {
         Self{child,origin,size}
     }
 }
 
-impl Drawable for Stencil<'_> {
-    unsafe fn _size(&self) -> V2 {self.size}
+impl<Colour:Copy> Drawable<Colour> for Stencil<'_, Colour> {
+    fn _size(&self) -> V2 {self.size}
 
-    unsafe fn _checked_clear(&mut self, colour: Colour){
+    fn _clear(&mut self, colour: Colour){
        self.child.rect_fill(self.origin, self.origin+self.size, colour);
     }
-    unsafe fn _checked_pixel(&mut self, pos: V2, colour: Colour){
+    unsafe fn _pixel(&mut self, pos: V2, colour: Colour){
         self.child.pixel(self.origin + pos, colour);
     }
-    unsafe fn _checked_hline(&mut self, pos: V2, len: u16, colour: Colour){
+    unsafe fn _hline(&mut self, pos: V2, len: u16, colour: Colour){
         self.child.horz_line(self.origin + pos, len, colour);
     }
-    unsafe fn _checked_vline(&mut self, pos: V2, len: u16, colour: Colour){
+    unsafe fn _vline(&mut self, pos: V2, len: u16, colour: Colour){
         self.child.vert_line(self.origin + pos, len, colour);
     }
-    unsafe fn _checked_rect(&mut self, p1: V2, p2: V2, colour: Colour){
+    unsafe fn _rect(&mut self, p1: V2, p2: V2, colour: Colour){
         self.child.rect_fill(self.origin + p1, self.origin + p2, colour);
     }
 }
@@ -50,46 +65,65 @@ impl Drawable for Stencil<'_> {
 pub enum RotationType{
     /// The Rotator has no effect
     NoRotation,
-    /// TODO
+    /// Paintings are rotated by 90 degrees clockwise
     CW,
-    /// TODO
+    /// Paintings are rotated by 180 degrees
     Flip,
-    /// TODO
+    /// Paintings are rotated by 90 degrees counter-clockwise
     CCW
 }
 
-/// Rotator turns it's child to either 90, 180 or 270 degrees.
-pub struct Rotator<'a> {
-    child: &'a mut dyn Drawable,
+/// Rotator the drawing to its child to either 90, 180 or 270 degrees.
+///
+/// ```text
+/// Original -> Apply Rotator     ->  Draw on  ->  Result on original
+/// drawable    RotationType::CW      Rotator      is rotated clockwise
+///
+/// |o....|          |..|               |a.|    ↻     |o.cba|
+/// |.o...|          |..|               |b.|  ---->   |.o...|
+///                  |..|               |c.|
+///                  |.o|               |.o|
+///                  |o.|               |o.|
+/// original        rotator            rotator        original
+/// surface         surface            surface        surface
+/// ```
+///
+/// # Example
+/// ```
+/// # use draw_i16::*; use core::str;
+/// let mut buffer = [b'.'; 2*5];
+/// let mut canvas = Canvas::new(&mut buffer, v2(5,2)).unwrap();
+/// canvas.pixel(v2(0, 0), b'o');
+/// canvas.pixel(v2(1, 1), b'o');
+/// let mut rotated = Rotator::new(&mut canvas, RotationType::CW);
+/// rotated.pixel(v2(0, 0), b'a');
+/// rotated.pixel(v2(0, 1), b'b');
+/// rotated.pixel(v2(0, 2), b'c');
+/// assert_eq!(str::from_utf8(&buffer).unwrap(), "o.cba.o...");
+/// ```
+pub struct Rotator<'a, Colour:Copy> {
+    child: &'a mut dyn Drawable<Colour>,
     rot: RotationType,
 }
-impl<'a> Rotator<'a> {
-    /// Create a new `Rotator`
-    pub fn new(child: &'a mut dyn Drawable, rot: RotationType)->Self {
+impl<'a, Colour:Copy> Rotator<'a, Colour> {
+    /// Create a new `Rotator` to draw rotated with `rot` type onto `child` drawable
+    pub fn new(child: &'a mut dyn Drawable<Colour>, rot: RotationType)->Self {
         Self{child, rot}
     }
 
-    unsafe fn coord_to_child(&self, r: V2) -> V2 {
+    fn coord_to_child(&self, r: V2) -> V2 {
         let sz = self.child._size();
 
         match self.rot {
-            RotationType::NoRotation => {
-                r
-            }
-            RotationType::CW => {
-                V2{x: sz.x-r.y, y: r.x}
-            }
-            RotationType::Flip => {
-                V2{x: sz.x-r.x, y: sz.y-r.y}
-            }
-            RotationType::CCW => {
-                V2{x: r.y, y: sz.y-r.x}
-            }
+            RotationType::NoRotation => r,
+            RotationType::CW => v2(sz.x-1-r.y, r.x),
+            RotationType::Flip => v2(sz.x-1-r.x, sz.y-1-r.y),
+            RotationType::CCW => v2(r.y, sz.y-1-r.x),
         }
     }
 }
-impl Drawable for Rotator<'_> {
-    unsafe fn _size(&self) -> V2 {
+impl<Colour:Copy> Drawable<Colour> for Rotator<'_, Colour> {
+    fn _size(&self) -> V2 {
         match self.rot {
             RotationType::NoRotation => {
                 self.child._size()
@@ -106,47 +140,47 @@ impl Drawable for Rotator<'_> {
         }
     }
 
-    unsafe fn _checked_clear(&mut self, colour: Colour) {
-       self.child._checked_clear(colour)
+    fn _clear(&mut self, colour: Colour) {
+       self.child._clear(colour)
     }
-    unsafe fn _checked_pixel(&mut self, pos: V2, colour: Colour){
-        self.child._checked_pixel(self.coord_to_child(pos), colour)
+    unsafe fn _pixel(&mut self, pos: V2, colour: Colour){
+        self.child._pixel(self.coord_to_child(pos), colour)
     }
-    
-    unsafe fn _checked_hline(&mut self, pos: V2, len: u16, colour: Colour){
+
+    unsafe fn _hline(&mut self, pos: V2, len: u16, colour: Colour){
 
         match self.rot {
             RotationType::NoRotation => {
-                self.child._checked_hline(pos, len, colour);
+                self.child._hline(pos, len, colour);
             }
             RotationType::CW => {
-                self.child._checked_vline(self.coord_to_child(pos+V2{x:0, y:0}), len, colour);
+                self.child._vline(self.coord_to_child(pos+V2{x:0, y:0}), len, colour);
             }
             RotationType::Flip => {
-                self.child._checked_hline(self.coord_to_child(pos + v2!(len as i16-1, 0)), len, colour);
+                self.child._hline(self.coord_to_child(pos + v2(len as i16-1, 0)), len, colour);
             }
             RotationType::CCW => {
-                self.child._checked_vline(self.coord_to_child( pos+v2!(len as i16-1, 0) ), len, colour);
+                self.child._vline(self.coord_to_child(pos + v2(len as i16-1, 0)), len, colour);
             }
         }
     }
-    unsafe fn _checked_vline(&mut self, pos: V2, len: u16, colour: Colour){
+    unsafe fn _vline(&mut self, pos: V2, len: u16, colour: Colour){
         match self.rot {
             RotationType::NoRotation => {
-                self.child._checked_vline(pos, len, colour);
+                self.child._vline(pos, len, colour);
             }
             RotationType::CW => {
-                self.child._checked_hline(self.coord_to_child(pos + v2!(0, len as i16-1)), len, colour);
+                self.child._hline(self.coord_to_child(pos + v2(0, len as i16-1)), len, colour);
             }
             RotationType::Flip => {
-                self.child._checked_vline(self.coord_to_child(pos + v2!(0, len as i16-1) ), len, colour);
+                self.child._vline(self.coord_to_child(pos + v2(0, len as i16-1) ), len, colour);
             }
             RotationType::CCW => {
-                self.child._checked_hline(self.coord_to_child(pos), len, colour);
+                self.child._hline(self.coord_to_child(pos), len, colour);
             }
         }
     }
-    unsafe fn _checked_rect(&mut self, p1: V2, p2: V2, colour: Colour){
+    unsafe fn _rect(&mut self, p1: V2, p2: V2, colour: Colour){
         let pp1 = self.coord_to_child(p1);
         let pp2 = self.coord_to_child(p2);
         self.child.rect_fill(
@@ -154,4 +188,16 @@ impl Drawable for Rotator<'_> {
             V2{x:pp2.x, y:pp1.y},
             colour);
     }
+}
+
+#[test]
+fn test_rotator() {
+    use crate::*;
+    let mut buffer = [b'.'; 2*3];
+    let mut canvas = Canvas::new(&mut buffer, v2(2,3)).unwrap();
+    Rotator::new(&mut canvas, RotationType::CW).pixel(v2(1, 0), b'a');
+    Rotator::new(&mut canvas, RotationType::Flip).pixel(v2(1, 0), b'b');
+    Rotator::new(&mut canvas, RotationType::CCW).pixel(v2(1, 0), b'c');
+    println!("{}", drawable::canvas_to_string(&canvas));
+    assert_eq!(core::str::from_utf8(&buffer).unwrap(), "..cab.");
 }
