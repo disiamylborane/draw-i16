@@ -1,5 +1,7 @@
 //! A bunch of rasterizing algorithms
 
+use ranged_integers::r;
+
 use crate::font::GlyphProvider;
 use crate::{V2, v2};
 
@@ -90,13 +92,13 @@ pub trait DrawableMethods<Colour:Copy>: Drawable<Colour>+Sized {
     #[inline] fn rect_fill(&mut self, p1: V2, p2: V2, colour: Colour) { <dyn Drawable<Colour>>::rect_fill(self, p1, p2, colour) }
 
     /// Paint an ellipse contour by center and horizontal/vertical radius
-    #[inline] fn ellipse_at_center(&mut self, center: V2, radii: (i16, i16), colour: Colour) {
-        <dyn Drawable<Colour>>::ellipse_at_center(self, center, radii, colour)
+    #[inline] fn ellipse_at_center(&mut self, center: V2, radii: (i16, i16), colour: Colour, quadrants: [bool; 4], width: u8) {
+        <dyn Drawable<Colour>>::ellipse_at_center(self, center, radii, colour, quadrants, width)
     }
 
     /// Paint an ellipse contour by the corner points of the bounding rectangle
-    #[inline] fn ellipse_at_rect(&mut self, p1: V2, p2: V2, colour: Colour) {
-        <dyn Drawable<Colour>>::ellipse_at_rect(self, p1, p2, colour)
+    #[inline] fn ellipse_at_rect(&mut self, p1: V2, p2: V2, colour: Colour, quadrants: [bool; 4], width: u8) {
+        <dyn Drawable<Colour>>::ellipse_at_rect(self, p1, p2, colour, quadrants, width)
     }
 
     /// Paint a quadratic bezier curve
@@ -104,6 +106,13 @@ pub trait DrawableMethods<Colour:Copy>: Drawable<Colour>+Sized {
     /// `p0` and `p2` for line endings, p1 as control point
     #[inline] fn quad_bezier(&mut self, p0: V2, p1: V2, p2: V2, colour: Colour, width: u8) {
         <dyn Drawable<Colour>>::quad_bezier(self, p0, p1, p2, colour, width)
+    }
+
+    /// Paint a quadratic spline between 3 points
+    /// 
+    /// `p0` and `p2` for line endings, p1 as central point
+    #[inline] fn quad_spline(&mut self, p0: V2, p1: V2, p2: V2, colour: Colour, width: u8) {
+        <dyn Drawable<Colour>>::quad_spline(self, p0, p1, p2, colour, width)
     }
 
     /// Paint a glyph using the user-defined char code to glyph converter.
@@ -190,6 +199,8 @@ impl<Colour:Copy> dyn Drawable<Colour>+'_ {
     }
 
     /// Draw a horizontal line
+    /// 
+    /// `pos` is a point of line start, `len` is a line length
     pub fn horz_line(&mut self, pos: V2, len: u16, colour: Colour) {
         let mut pos = pos;
         let mut len = len as i16;
@@ -215,6 +226,8 @@ impl<Colour:Copy> dyn Drawable<Colour>+'_ {
     }
 
     /// Draw a vertical line
+    /// 
+    /// `pos` is a point of line start, `len` is a line length
     pub fn vert_line(&mut self, pos: V2, len: u16, colour: Colour) {
         let mut npos = pos;
         let mut nlen = len as i16;
@@ -239,7 +252,9 @@ impl<Colour:Copy> dyn Drawable<Colour>+'_ {
         }
     }
 
-    /// Draw any line
+    /// Draw a line
+    /// 
+    /// `p1` and `p2` are line endings
     pub fn line(&mut self, p1: V2, p2: V2, colour: Colour, width: u8) {
         if width == 0 {return;}
 
@@ -349,6 +364,30 @@ impl<Colour:Copy> dyn Drawable<Colour>+'_ {
         unsafe {
             self._rect(V2::new(x1, y1), V2::new(x2, y2), colour);
         }
+    }
+
+    /// Draw a rounded rectangle contour
+    pub fn round_rect(&mut self, p1: V2, p2: V2, radius: u16, colour: Colour, width: u8) {
+        let x1 = min(p1.x, p2.x);
+        let x2 = max(p1.x, p2.x);
+        let y1 = min(p1.y, p2.y);
+        let y2 = max(p1.y, p2.y);
+
+        let hlinestart = (x1 + radius as i16).min(x2);
+        let hlineend = (x2 - radius as i16).max(x1);
+        self.line(v2(hlinestart, y1), v2(hlineend, y1), colour, width);
+        self.line(v2(hlinestart, y2), v2(hlineend, y2), colour, width);
+
+        let vlinestart = (y1 + radius as i16).min(y2);
+        let vlineend = (y2 - radius as i16).max(y1);
+        self.line(v2(x1, vlinestart), v2(x1, vlineend), colour, width);
+        self.line(v2(x2, vlinestart), v2(x2, vlineend), colour, width);
+
+        let radius = (radius as i16, radius as i16);
+        self.ellipse_at_center(v2(hlinestart, vlinestart), radius, colour, [true,false,false,false], width);
+        self.ellipse_at_center(v2(hlineend, vlinestart), radius, colour, [false,true,false,false], width);
+        self.ellipse_at_center(v2(hlinestart, vlineend), radius, colour, [false,false,true,false], width);
+        self.ellipse_at_center(v2(hlineend, vlineend), radius, colour, [false,false,false,true], width);
     }
 
     // Adopted from [Zingl Alois] http://members.chello.at/easyfilter/bresenham.html
@@ -494,46 +533,21 @@ impl<Colour:Copy> dyn Drawable<Colour>+'_ {
         }
     }
 
+    /// quadratic spline between points
+    pub fn quad_spline(&mut self, p0: V2, p1: V2, p2: V2, colour: Colour, width: u8)
+    {
+        let ctrl = (p1*4 - p0 - p2 + v2(1, 1)) / 2;
+        self.quad_bezier(v2(p0.x, p0.y), ctrl, v2(p2.x, p2.y), colour, width);
+    }
+
     /// Draw an ellipse contour by center and horizontal/vertical radii
-    pub fn ellipse_at_center(&mut self, V2 { x:xm, y:ym }: V2, (a, b): (i16, i16), colour: Colour) {
-        let mut set_pixel = |x: i32, y: i32| {self.pixel(v2(x as i16, y as i16), colour);};
-
-        let mut x = -a as i32;
-        let mut y = 0;
-        let mut dx = (1+2*x)*b as i32*b as i32;
-        let mut dy = x*x;
-        let mut err = dx+dy;
-        loop {
-            set_pixel(xm as i32-x, ym as i32+y); /* I. Quadrant */
-            set_pixel(xm as i32+x, ym as i32+y); /* II. Quadrant */
-            set_pixel(xm as i32+x, ym as i32-y); /* III. Quadrant */
-            set_pixel(xm as i32-x, ym as i32-y); /* IV. Quadrant */
-            let e2 = 2*err;
-            if e2 >= dx {
-                x+=1;
-                dx += 2*b as i32*b as i32;
-                err += dx;
-            }
-            if e2 <= dy {
-                y+=1;
-                dy += 2*a as i32*a as i32;
-                err += dy;
-            }
-            if x > 0 {
-                break;
-            }
-        }
-
-        while y < b as i32 { /* to early stop for flat ellipses with a=1, */
-            y += 1;
-            set_pixel(xm as i32, ym as i32+y); /* -> finish tip of ellipse */
-            set_pixel(xm as i32, ym as i32-y);
-        }
+    pub fn ellipse_at_center(&mut self, V2 { x:xm, y:ym }: V2, (a, b): (i16, i16), colour: Colour, quadrants: [bool; 4], width: u8) {
+        self.ellipse_at_rect(v2(xm-a, ym-b), v2(xm+a, ym+b), colour, quadrants, width)
     }
 
     /// Draw an ellipse contour inside a specified rect
-    pub fn ellipse_at_rect(&mut self, V2 { x:mut x0, y: mut y0 }: V2, V2 { x:mut x1, y:mut y1 }: V2, colour: Colour) {
-        let mut set_pixel = |x: i16, y: i16| {self.pixel(v2(x, y), colour);};
+    pub fn ellipse_at_rect(&mut self, V2 { x:mut x0, y: mut y0 }: V2, V2 { x:mut x1, y:mut y1 }: V2, colour: Colour, quadrants: [bool; 4], width: u8) {
+        let mut set_pixel = |x: i16, y: i16| {self.thick_pixel(v2(x, y), colour, width);};
 
         let a = (x1-x0).abs();
         let b = (y1-y0).abs();
@@ -550,10 +564,10 @@ impl<Colour:Copy> dyn Drawable<Colour>+'_ {
         let a = 8*a as i32*a as i32;
         let b1 = 8*b as i32*b as i32;
         loop {
-            set_pixel(x1, y0);
-            set_pixel(x0, y0);
-            set_pixel(x0, y1);
-            set_pixel(x1, y1);
+            if quadrants[3] { set_pixel(x1, y0); }
+            if quadrants[2] { set_pixel(x0, y0); }
+            if quadrants[0] { set_pixel(x0, y1); }
+            if quadrants[1] { set_pixel(x1, y1); }
             e2 = 2*err;
             if e2 <= dy { y0+=1; y1-=1; dy += a; err += dy; }
             if e2 >= dx || 2*err > dy { x0+=1; x1-=1; dx += b1; err += dx;}
@@ -563,11 +577,11 @@ impl<Colour:Copy> dyn Drawable<Colour>+'_ {
         }
 
         while y0-y1 <= b {
-            set_pixel(x0-1, y0);
-            set_pixel(x1+1, y0);
+            if quadrants[3] { set_pixel(x0-1, y0); }
+            if quadrants[2] { set_pixel(x1+1, y0); }
+            if quadrants[0] { set_pixel(x0-1, y1); }
+            if quadrants[1] { set_pixel(x1+1, y1); }
             y0 += 1;
-            set_pixel(x0-1, y1);
-            set_pixel(x1+1, y1);
             y1 -= 1;
         }
     }
@@ -576,8 +590,7 @@ impl<Colour:Copy> dyn Drawable<Colour>+'_ {
     #[doc(cfg(feature="font_data"))]
     /// Generate and render a symbol
     pub fn symbol(&mut self, ch: char, fontsize: V2, pos: V2, colour: Colour) {
-        let mut sten = crate::helpers::Stencil::new(self, pos, fontsize);
-        crate::font::draw_char(ch as u32, &font_data::TABLES as &[GlyphTable], &mut sten, colour);
+        self.symbol_with_provider(&font_data::TABLES as &[GlyphTable], ch, fontsize, pos, colour);
     }
 
     #[cfg(any(feature="font_data", doc))]
@@ -605,7 +618,20 @@ impl<Colour:Copy> dyn Drawable<Colour>+'_ {
     /// Generate and render a symbol with the user-defined steps
     pub fn symbol_with_provider(&mut self, tables: impl crate::font::GlyphProvider, ch: char, fontsize: V2, pos: V2, colour: Colour) {
         let mut sten = crate::helpers::Stencil::new(self, pos, fontsize);
-        crate::font::draw_char(ch as u32, tables, &mut sten, colour);
+        if let Some(cmds) = tables.get_glyph(ch as u32) {
+            crate::font::draw_glyph(cmds, &mut sten, colour, tables);
+        }
+        else {
+            use crate::font::GlyphStep;
+            use crate::font::GlyphCoord;
+            use crate::font::GlyphConnectionType::Outline;
+            crate::font::draw_glyph([
+                GlyphStep{coord: GlyphCoord{x: r!([] 0), y: r!([] 24)}, tp: Outline{thick: false, update: true}},
+                GlyphStep{coord: GlyphCoord{x: r!([] 12), y: r!([] 24)}, tp: Outline{thick: false, update: true}},
+                GlyphStep{coord: GlyphCoord{x: r!([] 12), y: r!([] 0)}, tp: Outline{thick: false, update: true}},
+                GlyphStep{coord: GlyphCoord{x: r!([] 0), y: r!([] 0)}, tp: Outline{thick: false, update: true}},
+            ].iter().cloned(), &mut sten, colour, tables);
+        }
     }
 }
 
@@ -634,8 +660,10 @@ fn test_ellipse() {
     let mut canvas = crate::canvas::Canvas::<u8>::new(&mut buffer, v2(SIZE, SIZE)).unwrap();
     let c : &mut dyn Drawable<u8> = &mut canvas;
 
-    c.ellipse_at_center(V2 { x: 10, y: 10 }, (5, 8), b'.');
-    c.ellipse_at_rect(V2 { x: 1, y: 1 }, V2 { x: 15, y: 10 }, b'o');
+    c.ellipse_at_center(V2 { x: 10, y: 10 }, (5, 8), b'.', [true;4], 1);
+    c.ellipse_at_rect(V2 { x: 1, y: 1 }, V2 { x: 15, y: 10 }, b'o', [true;4], 1);
+
+    println!("{}", canvas_to_string(&canvas));
 
     assert_eq!(canvas_to_string(&canvas).trim(),
 "

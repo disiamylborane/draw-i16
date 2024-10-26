@@ -1,4 +1,4 @@
-//! This module defines the font rasterization.
+//! The font rasterization
 //!
 //! The glyph painting is a set of commands defined by [GlyphStep]. Every
 //! [GlyphStep] can be packed to 12 bits, it contains the coordinates
@@ -13,7 +13,7 @@
 //! to create or modify a glyph table.
 
 use ranged_integers::*;
-use crate::{Drawable, V2};
+use crate::{v2, Drawable, V2};
 
 /// Part of glyph drawing step: the current action
 #[derive(Clone, PartialEq, Eq)]
@@ -27,10 +27,16 @@ pub enum GlyphConnectionType {
         /// Draw the next line from the current (true) or previous (false) position
         update: bool
     },
-    /// Make the line curved, use this as the control point between the previous and the next
+    /// Alter the command for the next point
+    /// 
+    /// - Control+Outline = Spline, draw a quadratic spline, use this as the control point between the previous and the next
+    /// - Control+Break = Recall, draw another symbol using [recall_to_code()] function to get a character code
     Control,
-    /// Special case. Draw an already existing glyph with the code specified
-    Recall
+    /// Quarter Circle
+    Oval {
+        /// Paint halfcircle starting inclining right or left from straight line
+        right : bool
+    },
 }
 
 /// Coordinates used in GlyphStep
@@ -70,7 +76,7 @@ pub trait GlyphProvider : Copy {
 /// Glyph provider that provides no glyphs
 ///
 /// Can be used as a dummy instance of GlyphProvider, is used in the
-/// [`Recall`](GlyphConnectionType::Recall) command handling
+/// [`Recall`](GlyphConnectionType::Control) command handling
 #[derive(Clone, Copy)]
 pub struct EmptyGlyphProvider;
 impl GlyphProvider for EmptyGlyphProvider {
@@ -110,74 +116,42 @@ impl GlyphProvider for &[GlyphTable] {
     }
 }
 
-
-pub(super) fn draw_unknown<Colour:Copy>(canvas: &mut dyn Drawable<Colour>, colour: Colour) {
-    let steps = [
-        GlyphStep{coord: GlyphCoord{x: r!([] 0), y: r!([] 24)},
-                  tp: GlyphConnectionType::Outline{thick: false, update: true}},
-        GlyphStep{coord: GlyphCoord{x: r!([] 12), y: r!([] 24)},
-                  tp: GlyphConnectionType::Outline{thick: false, update: true}},
-        GlyphStep{coord: GlyphCoord{x: r!([] 12), y: r!([] 0)},
-                  tp: GlyphConnectionType::Outline{thick: false, update: true}},
-        GlyphStep{coord: GlyphCoord{x: r!([] 0), y: r!([] 0)},
-                  tp: GlyphConnectionType::Outline{thick: false, update: true}},
-    ];
-
-    let mut iter = steps.iter().cloned();
-
-    let a: &[GlyphTable] = &[];
-    draw_glyph(&mut iter, canvas, colour, a)
-}
-
-
-pub(super) fn draw_char<Colour:Copy>(ch: u32, tables: impl GlyphProvider, canvas: &mut dyn Drawable<Colour>, colour: Colour) {
-    if let Some(cmds) = tables.get_glyph(ch) {
-        draw_glyph(cmds, canvas, colour, tables);
-    }
-    else {
-        draw_unknown(canvas, colour)
-    }
-}
-
-
 impl GlyphConnectionType {
-    fn from_raw(raw: Ranged<0, 0b111>) -> Self {
+    const fn from_raw(raw: Ranged<0, 0b111>) -> Self {
         rmatch!{[0 0b111] raw
             0b000 => {Self::Break}
             0b001 => {Self::Control}
-            0b010 => {Self::Recall}
-            0b011 => {unreachable!()}
+            0b010 => {Self::Oval{right: false}}
+            0b011 => {Self::Oval{right: true}}
             0b100 => {Self::Outline{thick: false, update: false}}
             0b101 => {Self::Outline{thick: false, update: true}}
             0b110 => {Self::Outline{thick: true, update: false}}
             0b111 => {Self::Outline{thick: true, update: true}}
         }
     }
-    fn try_from_raw(raw: Ranged<0, 0b111>) -> Option<Self> {
-        Some(rmatch!{[0 0b111] raw
-            0b000 => {Self::Break}
-            0b001 => {Self::Control}
-            0b010 => {Self::Recall}
-            0b011 => {return None}
-            0b100 => {Self::Outline{thick: false, update: false}}
-            0b101 => {Self::Outline{thick: false, update: true}}
-            0b110 => {Self::Outline{thick: true, update: false}}
-            0b111 => {Self::Outline{thick: true, update: true}}
-        })
-    }
-    const fn into_raw(self) -> u16 {
+    const fn into_raw(self) -> Ranged<0, 0b111> {
         match self {
-            Self::Break => 0b000,
-            Self::Control => 0b001,
-            Self::Outline{thick, update} => 0b100 | (thick as u16)<< 1 | (update as u16),
-            Self::Recall => 0b010,
+            GlyphConnectionType::Break => r!([] 0b000),
+            GlyphConnectionType::Control => r!([] 0b001),
+            GlyphConnectionType::Oval{right: false} => r!([] 0b010),
+            GlyphConnectionType::Oval{right: true} => r!([] 0b011),
+            Self::Outline{thick: false, update: false} => r!([] 0b100),
+            Self::Outline{thick: false, update: true} => r!([] 0b101),
+            Self::Outline{thick: true, update: false} => r!([] 0b110),
+            Self::Outline{thick: true, update: true} => r!([] 0b111),
         }
     }
 }
 
 impl GlyphCoord {
-    fn coords(self, glyphsize: V2) -> V2 {
-        let xgap = gap_by_xsize(glyphsize.x as u8) as i16;
+    fn gap_by_xsize(xsize: u8) -> u8 {
+        let gap = xsize/5;
+        if (xsize-gap) % 2 == 0 {gap+1}
+        else {gap}
+    }
+
+    fn get_real_coords(self, glyphsize: V2) -> V2 {
+        let xgap = Self::gap_by_xsize(glyphsize.x as u8) as i16;
         let xglyph = glyphsize.x - xgap;
         let cx = self.x.i16();
         let x = match cx {
@@ -196,40 +170,26 @@ impl GlyphCoord {
 
 impl GlyphStep {
     /// Convert a raw 12-bit number to GlyphStep
-    ///
-    /// Panics on invalid input
     pub fn from_raw(raw: Ranged<0, 0xFFF>) -> Self {
         use core::ops::Div;
         use core::ops::Rem;
 
         let rtp = raw.div(r!(512));
-        let ryv = (raw.div(r!(16))).rem(r!(32));
-        let rxv = raw.rem(r!(16));
+        let y = (raw.div(r!(16))).rem(r!(32));
+        let x = raw.rem(r!(16));
 
-        Self{coord: GlyphCoord{x: rxv,
-                               y: ryv},
-                tp: GlyphConnectionType::from_raw(rtp)}
-    }
-    /// Convert a raw 12-bit number to GlyphStep. Returns None on invalid input
-    pub fn try_from_raw(raw: Ranged<0, 0xFFF>) -> Option<Self> {
-        use core::ops::Div;
-        use core::ops::Rem;
-
-        let rtp = raw.div(r!(512));
-        let ryv = (raw.div(r!(16))).rem(r!(32));
-        let rxv = raw.rem(r!(16));
-
-        let tp = GlyphConnectionType::try_from_raw(rtp)?;
-
-        Self{coord: GlyphCoord{x: rxv, y: ryv}, tp}.into()
+        Self {
+            coord: GlyphCoord{x, y},
+            tp: GlyphConnectionType::from_raw(rtp)
+        }
     }
 
     /// Convert to a 12-bit representation, may be converted back by `from_raw`
     pub const fn into_raw(self) -> u16 {
-        let rtp = self.tp.into_raw();
+        let rtp = self.tp.into_raw().u16();
         let ryv = self.coord.y.u16();
         let rxv = self.coord.x.u16();
-        rtp<<9 | ryv<<4 | rxv
+        rtp * 512 + ryv * 16 + rxv
     }
 
     /// Convert a pair of steps to raw data
@@ -245,12 +205,6 @@ impl GlyphStep {
         let s2 = gd[1].as_ranged() / r!(0b10000) + gd[2].as_ranged() * r!(0b10000);
         [Self::from_raw(s1), Self::from_raw(s2)]
     }
-}
-
-pub(super) fn gap_by_xsize(xsize: u8) -> u8 {
-    let gap = xsize/5;
-    if (xsize-gap) % 2 == 0 {gap+1}
-    else {gap}
 }
 
 /// Get a font rect size the library is trimmed for
@@ -299,51 +253,77 @@ pub fn code_to_recall(code: Ranged<0, 0x3ffff>) -> (GlyphCoord, GlyphCoord) {
 ///
 /// Glyph defined by `steps` is drawn on the `drawable`. The function uses the whole
 /// [drawable size](crate::Drawable::_size) as a font size, so, typically applying
-/// of [`Stencil`](crate::Stencil) is needed. For the [Recall](GlyphConnectionType::Recall)
+/// of [`Stencil`](crate::Stencil) is needed. For the [Recall](GlyphConnectionType::Control)
 /// steps the glyph will be searched in the `recall_tables`, consider passing
 /// `&[GlyphTable]` or `EmptyGlyphProvider`.
 pub fn draw_glyph<Colour:Copy>(steps: impl Iterator<Item=GlyphStep>, drawable: &mut dyn Drawable<Colour>, colour: Colour, recall_tables: impl GlyphProvider) {
-    let mut ctrlpoint: GlyphCoord = GlyphCoord{x: r!([] 0), y: r!([] 1)};
-    let mut prevpoint: GlyphCoord = GlyphCoord{x: r!([] 0), y: r!([] 1)};
-    let mut curve_flag = false;
-    let mut recall_point: Option<GlyphCoord> = None;
+    let mut prevpoint: GlyphCoord = GlyphCoord{x: r!([] 0), y: r!([] 2)};
+    let mut ctrlpoint: Option<GlyphCoord> = None;
 
-    for step in steps {
-        if let Some(prevpoint) = recall_point {
-            let ch = recall_to_code(prevpoint, step.coord).u32();
-            if let Some(iter) = recall_tables.get_glyph(ch) {
-                draw_glyph(iter, drawable, colour, EmptyGlyphProvider);
-            }
-            recall_point = None;
-            continue;
-        }
-        match step.tp {
-            GlyphConnectionType::Recall => {
-                recall_point = Some(step.coord);
-            }
-            GlyphConnectionType::Break => {
-                prevpoint = step.coord;
-                curve_flag = false;
-            },
+    let csize = drawable.size();
+
+    for GlyphStep { coord, tp } in steps {
+        match tp {
             GlyphConnectionType::Control => {
-                ctrlpoint = step.coord;
-                curve_flag = true;
+                ctrlpoint = Some(coord);
             },
-            GlyphConnectionType::Outline{thick, update} => {
-                let csize = drawable.size();
-                let width = line_width(thick, csize);
-
-                if curve_flag {
-                    drawable.quad_bezier(prevpoint.coords(csize), ctrlpoint.coords(csize), step.coord.coords(csize), colour, width);
+            GlyphConnectionType::Break => {
+                if let Some(cp) = ctrlpoint {
+                    let char = recall_to_code(cp, coord);
+                    if let Some(iter) = recall_tables.get_glyph(char.u32()) {
+                        draw_glyph(iter, drawable, colour, EmptyGlyphProvider);
+                    }
                 }
                 else {
-                    drawable.line(prevpoint.coords(csize), step.coord.coords(csize), colour, width);
+                    prevpoint = coord;
+                }
+                ctrlpoint = None;
+            }
+            GlyphConnectionType::Outline { thick, update } => {
+                let width = line_width(thick, csize);
+                
+                if let Some(cp) = ctrlpoint {
+                    drawable.quad_spline(prevpoint.get_real_coords(csize), cp.get_real_coords(csize), coord.get_real_coords(csize), colour, width);
+                }
+                else {
+                    drawable.line(prevpoint.get_real_coords(csize), coord.get_real_coords(csize), colour, width);
+                }
+                if update {prevpoint = coord;}
+                ctrlpoint = None;
+            }
+            GlyphConnectionType::Oval{right} => {
+                let width = line_width(true, csize);
+                let prev = prevpoint.get_real_coords(csize);
+                let curr = coord.get_real_coords(csize);
+
+                if let Some(_control) = ctrlpoint.map(|cp| cp.get_real_coords(csize)) {
+                    // Nothing for now
+                }
+                else {
+                    let center = if ((curr.x >= prev.x) == (curr.y >= prev.y)) != right {v2(prev.x, curr.y)} else {v2(curr.x, prev.y)};
+                    let radii = curr-prev;
+
+                    if right {
+                        drawable.ellipse_at_center(center, (radii.x.abs(), radii.y.abs()), colour, [
+                            curr.y > prev.y && curr.x <= prev.x,
+                            curr.y <= prev.y && curr.x <= prev.x,
+                            curr.y > prev.y && curr.x > prev.x,
+                            curr.y <= prev.y && curr.x > prev.x,
+                        ], width);
+                    }
+                    else {
+                        drawable.ellipse_at_center(center, (radii.x.abs(), radii.y.abs()), colour, [
+                            curr.y <= prev.y && curr.x > prev.x,
+                            curr.y >  prev.y && curr.x > prev.x,
+                            curr.y <= prev.y && curr.x <= prev.x,
+                            curr.y > prev.y && curr.x <= prev.x,
+                        ], width);
+                    }
                 }
 
-                if update {prevpoint = step.coord;}
-
-                curve_flag = false;
-            },
+                prevpoint = coord;
+                ctrlpoint = None;   
+            }
         };
     }
 }
