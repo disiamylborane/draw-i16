@@ -3,7 +3,7 @@
 **draw-i16** is a 2D shape and font rasterizing middleware
 tailored to small LCD output and embedded systems. It uses i16
 values for coordinates and no floating point arithmetics.
-The library is no_std compatible.
+The library is `no_std` compatible.
 
 - Shape rasterizing feature: provide a pixel setting function and use the library
   to draw lines, curves, ellipses and texts. One may use is a standard pixel-setting type.
@@ -113,6 +113,9 @@ display.text(text, font_size, v2(size.x/2 - 7*5/2, size.y/2 - 12/2), Colour565::
 #![feature(adt_const_params, generic_const_exprs)]
 #![feature(doc_cfg)]
 #![deny(missing_docs)]
+#![warn(clippy::nursery)]
+#![allow(clippy::used_underscore_items)]
+#![allow(clippy::cast_possible_wrap)]
 
 #[cfg(test)]
 #[macro_use]
@@ -137,7 +140,7 @@ mod helpers;
 mod canvas;
 mod colour;
 
-pub use canvas::{Canvas, CanvasSizeMismatchError};
+pub use canvas::Canvas;
 pub use colour::Colour565;
 pub use helpers::Stencil;
 pub use helpers::{Rotator, RotationType};

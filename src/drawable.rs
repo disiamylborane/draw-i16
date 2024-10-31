@@ -93,48 +93,48 @@ pub trait DrawableMethods<Colour:Copy>: Drawable<Colour>+Sized {
 
     /// Paint an ellipse contour by center and horizontal/vertical radius
     #[inline] fn ellipse_at_center(&mut self, center: V2, radii: (i16, i16), colour: Colour, quadrants: [bool; 4], width: u8) {
-        <dyn Drawable<Colour>>::ellipse_at_center(self, center, radii, colour, quadrants, width)
+        <dyn Drawable<Colour>>::ellipse_at_center(self, center, radii, colour, quadrants, width);
     }
 
     /// Paint an ellipse contour by the corner points of the bounding rectangle
     #[inline] fn ellipse_at_rect(&mut self, p1: V2, p2: V2, colour: Colour, quadrants: [bool; 4], width: u8) {
-        <dyn Drawable<Colour>>::ellipse_at_rect(self, p1, p2, colour, quadrants, width)
+        <dyn Drawable<Colour>>::ellipse_at_rect(self, p1, p2, colour, quadrants, width);
     }
 
     /// Paint a quadratic bezier curve
     /// 
     /// `p0` and `p2` for line endings, p1 as control point
     #[inline] fn quad_bezier(&mut self, p0: V2, p1: V2, p2: V2, colour: Colour, width: u8) {
-        <dyn Drawable<Colour>>::quad_bezier(self, p0, p1, p2, colour, width)
+        <dyn Drawable<Colour>>::quad_bezier(self, p0, p1, p2, colour, width);
     }
 
     /// Paint a quadratic spline between 3 points
     /// 
     /// `p0` and `p2` for line endings, p1 as central point
     #[inline] fn quad_spline(&mut self, p0: V2, p1: V2, p2: V2, colour: Colour, width: u8) {
-        <dyn Drawable<Colour>>::quad_spline(self, p0, p1, p2, colour, width)
+        <dyn Drawable<Colour>>::quad_spline(self, p0, p1, p2, colour, width);
     }
 
     /// Paint a glyph using the user-defined char code to glyph converter.
     /// 
     /// * `tables` - the code-to-glyph steps converter (see [`GlyphProvider`])
     /// * `ch` - char to display
-    /// * `fontsize` - size of one char (consider using [fontsize_to_glyphsize](crate::font::fontsize_to_glyphsize) output)
+    /// * `fontsize` - size of one char (consider using [`fontsize_to_glyphsize`](crate::font::fontsize_to_glyphsize) output)
     /// * `pos` - location of top left corner of the character
     /// * `colour` - parameter to draw the symbol pixels with
     #[inline] fn symbol_with_provider<G:GlyphProvider>(&mut self, tables: G, ch: char, fontsize: V2, pos: V2, colour: Colour) {
-        <dyn Drawable<Colour>>::symbol_with_provider(self, tables, ch, fontsize, pos, colour)
+        <dyn Drawable<Colour>>::symbol_with_provider(self, tables, ch, fontsize, pos, colour);
     }
 
     /// Paint a line of text using the user-defined char code to glyph converter
     /// 
     /// * `tables` - the code-to-glyph steps converter (see [`GlyphProvider`])
     /// * `s` - string to display
-    /// * `fontsize` - size of one char (consider using [fontsize_to_glyphsize](crate::font::fontsize_to_glyphsize) output)
+    /// * `fontsize` - size of one char (consider using [`fontsize_to_glyphsize`](crate::font::fontsize_to_glyphsize) output)
     /// * `pos` - location of top left corner of the character
     /// * `colour` - parameter to draw the symbol pixels with
     #[inline] fn text_with_provider<G:GlyphProvider>(&mut self, tables: G, s: &str, fontsize: V2, pos: V2, colour: Colour) {
-        <dyn Drawable<Colour>>::text_with_provider(self, tables, s, fontsize, pos, colour)
+        <dyn Drawable<Colour>>::text_with_provider(self, tables, s, fontsize, pos, colour);
     }
 
     /// Paint a glyph using the builtin font
@@ -260,12 +260,12 @@ impl<Colour:Copy> dyn Drawable<Colour>+'_ {
 
         if p1.y == p2.y {
             for y in (p1.y - (width as i16-1)/2)..(p1.y + 1 + (width as i16)/2) {
-                self.horz_line(V2::new(min(p1.x, p2.x), y), (p1.x-p2.x).unsigned_abs()+1, colour)
+                self.horz_line(V2::new(min(p1.x, p2.x), y), (p1.x-p2.x).unsigned_abs()+1, colour);
             }
         }
         else if p1.x == p2.x {
             for x in (p1.x - (width as i16-1)/2)..(p1.x + 1 + (width as i16)/2) {
-                self.vert_line(V2::new(x, min(p1.y, p2.y)), (p1.y-p2.y).unsigned_abs()+1, colour)
+                self.vert_line(V2::new(x, min(p1.y, p2.y)), (p1.y-p2.y).unsigned_abs()+1, colour);
             }
         }
         else {
@@ -286,7 +286,6 @@ impl<Colour:Copy> dyn Drawable<Colour>+'_ {
             };
 
             let dx = x2 - x1; // Positive
-            assert!(x2>x1);
             let dy = (y2 - y1).abs();
             let yinc = if y2 > y1 {1} else {-1};
 
@@ -307,12 +306,12 @@ impl<Colour:Copy> dyn Drawable<Colour>+'_ {
             let prenmsz = V2::new((width-1) as i16/2, (width-1) as i16/2);
             let prenasz = V2::new(width as i16/2, width as i16/2);
 
-            if !change_xy {
+            if change_xy {
                 for x in x1..(x1 + (x2-x1)/2 + 1) {
                     let pren1 = V2::new(x, y);
                     let pren2 = V2::new(x2 - (x-x1), yz);
-                    self.rect_fill(pren1-prenmsz, pren1+prenasz, colour);
-                    self.rect_fill(pren2-prenmsz, pren2+prenasz, colour);
+                    self.rect_fill((pren1-prenmsz).swap(), (pren1+prenasz).swap(), colour);
+                    self.rect_fill((pren2-prenmsz).swap(), (pren2+prenasz).swap(), colour);
                     recalc_y_err(&mut y, &mut yz);
                 }
             }
@@ -320,8 +319,8 @@ impl<Colour:Copy> dyn Drawable<Colour>+'_ {
                 for x in x1..(x1 + (x2-x1)/2 + 1) {
                     let pren1 = V2::new(x, y);
                     let pren2 = V2::new(x2 - (x-x1), yz);
-                    self.rect_fill((pren1-prenmsz).swap(), (pren1+prenasz).swap(), colour);
-                    self.rect_fill((pren2-prenmsz).swap(), (pren2+prenasz).swap(), colour);
+                    self.rect_fill(pren1-prenmsz, pren1+prenasz, colour);
+                    self.rect_fill(pren2-prenmsz, pren2+prenasz, colour);
                     recalc_y_err(&mut y, &mut yz);
                 }
             }
@@ -461,6 +460,7 @@ impl<Colour:Copy> dyn Drawable<Colour>+'_ {
     #[allow(non_snake_case)]
     fn _second_segm(&mut self, p0: V2, p1: V2, p2: V2, colour: Colour, width: u8)
     {
+        #![allow(clippy::suspicious_operation_groupings)]
         let (x0, x1, x2, y0, y1, y2) = (p0.x as i32, p1.x as i32, p2.x as i32, p0.y as i32, p1.y as i32, p2.y as i32);
 
         let dy_01 = y0-y1;
@@ -487,6 +487,7 @@ impl<Colour:Copy> dyn Drawable<Colour>+'_ {
     #[allow(non_snake_case)]
     pub fn quad_bezier(&mut self, p0: V2, p1: V2, p2: V2, colour: Colour, width: u8)
     {
+        #![allow(clippy::suspicious_operation_groupings)]
         // The algorithm is taken from [Zingl Alois] [http://members.chello.at/easyfilter/bresenham.html](http://members.chello.at/easyfilter/bresenham.html)
 
         let (x0, x1, x2, y0, y1, y2) = (p0.x, p1.x, p2.x, p0.y, p1.y, p2.y);
@@ -542,7 +543,7 @@ impl<Colour:Copy> dyn Drawable<Colour>+'_ {
 
     /// Draw an ellipse contour by center and horizontal/vertical radii
     pub fn ellipse_at_center(&mut self, V2 { x:xm, y:ym }: V2, (a, b): (i16, i16), colour: Colour, quadrants: [bool; 4], width: u8) {
-        self.ellipse_at_rect(v2(xm-a, ym-b), v2(xm+a, ym+b), colour, quadrants, width)
+        self.ellipse_at_rect(v2(xm-a, ym-b), v2(xm+a, ym+b), colour, quadrants, width);
     }
 
     /// Draw an ellipse contour inside a specified rect

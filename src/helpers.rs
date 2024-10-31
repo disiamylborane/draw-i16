@@ -125,26 +125,20 @@ impl<'a, Colour:Copy> Rotator<'a, Colour> {
 impl<Colour:Copy> Drawable<Colour> for Rotator<'_, Colour> {
     fn _size(&self) -> V2 {
         match self.rot {
-            RotationType::NoRotation => {
+            RotationType::NoRotation|RotationType::Flip => {
                 self.child._size()
             }
-            RotationType::CW => {
-                self.child._size().swap()
-            }
-            RotationType::Flip => {
-                self.child._size()
-            }
-            RotationType::CCW => {
+            RotationType::CW|RotationType::CCW => {
                 self.child._size().swap()
             }
         }
     }
 
     fn _clear(&mut self, colour: Colour) {
-       self.child._clear(colour)
+       self.child._clear(colour);
     }
-    unsafe fn _pixel(&mut self, pos: V2, colour: Colour){
-        self.child._pixel(self.coord_to_child(pos), colour)
+    unsafe fn _pixel(&mut self, pos: V2, colour: Colour) {
+        self.child._pixel(self.coord_to_child(pos), colour);
     }
 
     unsafe fn _hline(&mut self, pos: V2, len: u16, colour: Colour){
@@ -154,7 +148,7 @@ impl<Colour:Copy> Drawable<Colour> for Rotator<'_, Colour> {
                 self.child._hline(pos, len, colour);
             }
             RotationType::CW => {
-                self.child._vline(self.coord_to_child(pos+V2{x:0, y:0}), len, colour);
+                self.child._vline(self.coord_to_child(pos + v2(0, 0)), len, colour);
             }
             RotationType::Flip => {
                 self.child._hline(self.coord_to_child(pos + v2(len as i16-1, 0)), len, colour);

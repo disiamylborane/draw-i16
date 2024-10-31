@@ -4,7 +4,7 @@ use super::{Drawable, V2, v2};
 
 /// An error returned by `Canvas::new()` on size mismatch
 #[derive(Debug)]
-pub struct CanvasSizeMismatchError;
+pub struct SizeMismatchError;
 
 /// A reference to Colour slice representing a 2D drawing surface
 ///
@@ -26,16 +26,22 @@ pub struct Canvas<'buf, Colour:Copy> {
 
 impl<'buf, Colour:Copy> Canvas<'buf, Colour> {
     /// Create a new canvas on the existing buffer
-    pub fn new(buffer: &'buf mut [Colour], size: V2) -> Result<Self, CanvasSizeMismatchError> {
+    /// 
+    /// The buffer size must be exactly size.x * size.y
+    /// 
+    /// # Errors
+    /// `SizeMismatchError` on invalid canvas size
+    pub fn new(buffer: &'buf mut [Colour], size: V2) -> Result<Self, SizeMismatchError> {
         if size.x as usize * size.y as usize == buffer.len() {
             Ok(Self { buffer, sizex: size.x })
         }
         else {
-            Err(CanvasSizeMismatchError)
+            Err(SizeMismatchError)
         }
     }
 
     /// Get a pixel by coordinates
+    #[must_use]
     pub fn get_pixel(&self, point: V2) -> Option<Colour> {
         let sz = self._size();
         if 0 <= point.x && point.x <= sz.x &&
@@ -50,7 +56,7 @@ impl<'buf, Colour:Copy> Canvas<'buf, Colour> {
 }
 
 impl<Colour:Copy> Drawable<Colour> for Canvas<'_, Colour> {
-    fn _size(&self) -> V2 {v2(self.sizex, self.buffer.len() as i16/self.sizex)}
+    fn _size(&self) -> V2 {v2(self.sizex, (self.buffer.len()/self.sizex as usize) as i16)}
 
     fn _clear(&mut self, colour: Colour) {
         for p in self.buffer.iter_mut() {
@@ -71,8 +77,8 @@ impl<Colour:Copy> Drawable<Colour> for Canvas<'_, Colour> {
         }
     }
     unsafe fn _rect(&mut self, p1: V2, p2: V2, colour: Colour){
-        for x in p1.x..(p2.x+1) {
-            for y in p1.y..(p2.y+1) {
+        for x in p1.x..=p2.x {
+            for y in p1.y..=p2.y {
                 self.buffer[x as usize + y as usize*self.sizex as usize] = colour;
             }
         }

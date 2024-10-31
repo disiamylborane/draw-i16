@@ -9,16 +9,11 @@ use GlyphConnectionType::*;
 
 /// The standard glyph tables captured by [crate::DrawableMethods::text]
 
-// 2241 steps, 415 glyphs, 7553 bytes
-// 2212 steps, 415 glyphs, 7466 bytes
-// 2212 steps, 415 glyphs, 7466 bytes
-// 2151 steps, 415 glyphs, 7283 bytes
-// 2094 steps, 415 glyphs, 7112 bytes
-// 2032 steps, 415 glyphs, 6926 bytes
+// 2024 steps, 415 glyphs, ~6902 bytes
 
 pub const TABLES: [GlyphTable; 4] = [
     GLYPHS_LATIN,
-    LATIN_EXTRA,
+    GLYPHS_LATIN_EXTRA,
     GLYPHS_GREEK,
     GLYPHS_CYRILLIC,
 ];
@@ -85,13 +80,13 @@ pub const GLYPHS_LATIN : GlyphTable = GlyphTable {
         two_steps!(12, 19, Outline { thick: true, update: true }; 7, 23, Control),
         two_steps!(0, 23, Outline { thick: true, update: true }; 9, 24, Break),
         two_steps!(9, 1, Outline { thick: true, update: true }; 0, 17, Outline { thick: false, update: true }),
-        two_steps!(12, 17, Outline { thick: true, update: true }; 12, 1, Outline { thick: false, update: false }),
+        two_steps!(12, 17, Outline { thick: true, update: true }; 12, 2, Outline { thick: false, update: false }),
         two_steps!(0, 11, Outline { thick: true, update: true }; 12, 17, Oval { right: false }),
         two_steps!(0, 24, Oval { right: false }; 12, 2, Break),
         two_steps!(2, 5, Control; 0, 18, Outline { thick: true, update: true }),
         two_steps!(6, 25, Oval { right: true }; 12, 19, Oval { right: true }),
         two_steps!(6, 13, Oval { right: true }; 1, 13, Outline { thick: true, update: false }),
-        two_steps!(12, 1, Outline { thick: false, update: true }; 7, 12, Control),
+        two_steps!(12, 2, Outline { thick: false, update: true }; 7, 12, Control),
         two_steps!(6, 24, Outline { thick: true, update: true }; 6, 12, Break),
         two_steps!(12, 6, Oval { right: true }; 6, 1, Oval { right: true }),
         two_steps!(0, 6, Oval { right: true }; 6, 12, Oval { right: true }),
@@ -206,7 +201,7 @@ pub const GLYPHS_LATIN : GlyphTable = GlyphTable {
         two_steps!(6, 11, Break; 6, 24, Outline { thick: true, update: true }),
         two_steps!(6, 4, Break; 6, 5, Outline { thick: true, update: true }),
         two_steps!(6, 11, Break; 6, 25, Outline { thick: true, update: true }),
-        two_steps!(6, 29, Control; 3, 29, Outline { thick: true, update: true }),
+        two_steps!(5, 28, Control; 3, 29, Outline { thick: true, update: true }),
         two_steps!(0, 24, Outline { thick: true, update: true }; 0, 15, Break),
         two_steps!(12, 24, Outline { thick: true, update: false }; 12, 8, Outline { thick: false, update: true }),
         two_steps!(4, 1, Break; 7, 1, Outline { thick: false, update: true }),
@@ -261,9 +256,9 @@ pub const GLYPHS_LATIN : GlyphTable = GlyphTable {
     ]
 };
 
-pub const LATIN_EXTRA : GlyphTable = GlyphTable {
+pub const GLYPHS_LATIN_EXTRA : GlyphTable = GlyphTable {
     basechar: 'Ā',
-    addr: &[0, 4, 8, 13, 26, 31, 36, 43, 47, 55, 60, 67, 71, 79, 84, 91, 97, 101, 105, 113, 117, 126, 131, 139, 143, 151, 156, 165, 170, 179, 184, 193, 198, 202, 206, 210, 214, 219, 227, 235, 242, 252, 258, 266, 270, 279, 284, 292, 298, 306, 308, 318, 328, 335, 342, 346, 350, 355, 360, 365, 369, 373, 377, 381, 385, 389, 394, 398, 402, 406, 410, 414, 419, 424, 431, 436, 442, 446, 450, 458, 463, 472, 478, 488, 501, 508, 512, 516, 520, 528, 533, 542, 546, 556, 561, 566, 571, 581, 586, 592, 597, 604, 608, 613, 617, 623, 629, 633, 637, 642, 647, 658, 669, 675, 681, 686, 691, 696, 701, 706, 711, 717, 723, 727, 733, 737, 744, 749],
+    addr: &[0, 4, 8, 13, 18, 23, 28, 35, 39, 47, 52, 59, 63, 71, 76, 83, 89, 93, 97, 105, 109, 118, 123, 131, 135, 143, 148, 157, 162, 171, 176, 185, 190, 194, 198, 202, 206, 211, 219, 227, 234, 244, 250, 258, 262, 271, 276, 284, 290, 298, 300, 310, 320, 327, 334, 338, 342, 347, 352, 357, 361, 365, 369, 373, 377, 381, 386, 390, 394, 398, 402, 406, 411, 416, 423, 428, 434, 438, 442, 450, 455, 464, 470, 480, 493, 500, 504, 508, 512, 520, 525, 534, 538, 548, 553, 558, 563, 573, 578, 584, 589, 596, 600, 605, 609, 615, 621, 625, 629, 634, 639, 650, 661, 667, 673, 678, 683, 688, 693, 698, 703, 709, 715, 719, 725, 729, 736, 741],
     data: &[
         two_steps!(1, 4, Control; 0, 0, Break),
         two_steps!(3, 0, Break; 9, 0, Outline { thick: false, update: true }),
@@ -271,13 +266,9 @@ pub const LATIN_EXTRA : GlyphTable = GlyphTable {
         two_steps!(3, 4, Break; 9, 4, Outline { thick: false, update: true }),
         two_steps!(1, 4, Control; 0, 0, Break),
         two_steps!(3, 0, Break; 6, 2, Control),
-        two_steps!(9, 0, Outline { thick: false, update: false }; 0, 8, Break),
-        two_steps!(1, 7, Control; 6, 7, Outline { thick: true, update: true }),
-        two_steps!(12, 7, Control; 12, 14, Outline { thick: true, update: true }),
-        two_steps!(12, 24, Outline { thick: true, update: false }; 0, 14, Control),
-        two_steps!(0, 19, Outline { thick: true, update: true }; 1, 25, Control),
-        two_steps!(14, 24, Outline { thick: true, update: true }; 3, 2, Break),
-        two_steps!(6, 6, Control; 9, 2, Outline { thick: false, update: true }),
+        two_steps!(9, 0, Outline { thick: false, update: false }; 1, 6, Control),
+        two_steps!(0, 0, Break; 3, 2, Break),
+        two_steps!(6, 4, Control; 9, 2, Outline { thick: false, update: true }),
         two_steps!(1, 4, Control; 0, 0, Break),
         two_steps!(12, 24, Break; 9, 27, Control),
         two_steps!(12, 29, Outline { thick: false, update: false }; 1, 6, Control),
@@ -309,7 +300,7 @@ pub const LATIN_EXTRA : GlyphTable = GlyphTable {
         two_steps!(7, 6, Control; 11, 4, Outline { thick: false, update: true }),
         two_steps!(0, 3, Break; 12, 13, Oval { right: false }),
         two_steps!(0, 24, Oval { right: false }; 0, 3, Outline { thick: true, update: false }),
-        two_steps!(2, 0, Break; 6, 3, Control),
+        two_steps!(2, 0, Break; 6, 2, Control),
         two_steps!(10, 0, Outline { thick: false, update: true }; 10, 1, Break),
         two_steps!(10, 24, Outline { thick: true, update: true }; 0, 17, Oval { right: false }),
         two_steps!(10, 12, Oval { right: false }; 13, 0, Break),
@@ -1075,4 +1066,5 @@ pub const GLYPHS_CYRILLIC : GlyphTable = GlyphTable {
         two_steps!(0, 0, Break; 0, 0, Break),
     ]
 };
+
 

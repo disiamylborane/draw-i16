@@ -1,7 +1,7 @@
 //! The font rasterization
 //!
-//! The glyph painting is a set of commands defined by [GlyphStep]. Every
-//! [GlyphStep] can be packed to 12 bits, it contains the coordinates
+//! The glyph painting is a set of commands defined by [`GlyphStep`]. Every
+//! [`GlyphStep`] can be packed to 12 bits, it contains the coordinates
 //! and a specific command.
 //!
 //! The [`draw_glyph`] function is a common way to draw a character.
@@ -12,7 +12,7 @@
 //! There is a [gui tool](https://github.com/disiamylborane/draw-i16-fontviewer)
 //! to create or modify a glyph table.
 
-use ranged_integers::*;
+use ranged_integers::{AsRanged, Ranged, r, rmatch};
 use crate::{v2, Drawable, V2};
 
 /// Part of glyph drawing step: the current action
@@ -30,7 +30,7 @@ pub enum GlyphConnectionType {
     /// Alter the command for the next point
     /// 
     /// - Control+Outline = Spline, draw a quadratic spline, use this as the control point between the previous and the next
-    /// - Control+Break = Recall, draw another symbol using [recall_to_code()] function to get a character code
+    /// - Control+Break = Recall, draw another symbol using [`recall_to_code()`] function to get a character code
     Control,
     /// Quarter Circle
     Oval {
@@ -39,7 +39,7 @@ pub enum GlyphConnectionType {
     },
 }
 
-/// Coordinates used in GlyphStep
+/// Coordinates used in [`GlyphStep`]
 #[derive(Clone,Copy,PartialEq, Eq)]
 pub struct GlyphCoord {
     /// X coordinate
@@ -59,15 +59,15 @@ pub struct GlyphStep {
 
 /// Packed data containing some unicode block. `&[GlyphTable]` implements `GlyphProvider`.
 pub struct GlyphTable {
-    /// Code of the first char in the block (count is specified by addr.len())
+    /// Code of the first char in the block (count is specified by `addr.len()`)
     pub basechar: char,
     /// Adresses of the beginnings of chars
     pub addr: &'static [u16],
-    /// Compacted GlyphSteps (1 step per 12 bits)
+    /// Compacted `GlyphStep`s (1 step per 12 bits)
     pub data: &'static [[u8; 3]],
 }
 
-/// Abstraction for the GlyphStep generators
+/// Abstraction for the `GlyphStep` generators
 pub trait GlyphProvider : Copy {
     /// Yield the set of steps for the specified char
     fn get_glyph(self, char: u32) -> Option<impl Iterator<Item=GlyphStep>>;
@@ -75,7 +75,7 @@ pub trait GlyphProvider : Copy {
 
 /// Glyph provider that provides no glyphs
 ///
-/// Can be used as a dummy instance of GlyphProvider, is used in the
+/// Can be used as a dummy instance of [`GlyphProvider`], is used in the
 /// [`Recall`](GlyphConnectionType::Control) command handling
 #[derive(Clone, Copy)]
 pub struct EmptyGlyphProvider;
@@ -90,12 +90,12 @@ impl GlyphProvider for &[GlyphTable] {
             type Item = GlyphStep;
 
             fn next(&mut self) -> Option<Self::Item> {
-                if self.current != self.end {
+                if self.current == self.end {None}
+                else {
                     let step = get_glyphstep(self.s, self.current);
                     self.current += 1;
                     Some(step)
                 }
-                else {None}
             }
         }
 
@@ -131,10 +131,10 @@ impl GlyphConnectionType {
     }
     const fn into_raw(self) -> Ranged<0, 0b111> {
         match self {
-            GlyphConnectionType::Break => r!([] 0b000),
-            GlyphConnectionType::Control => r!([] 0b001),
-            GlyphConnectionType::Oval{right: false} => r!([] 0b010),
-            GlyphConnectionType::Oval{right: true} => r!([] 0b011),
+            Self::Break => r!([] 0b000),
+            Self::Control => r!([] 0b001),
+            Self::Oval{right: false} => r!([] 0b010),
+            Self::Oval{right: true} => r!([] 0b011),
             Self::Outline{thick: false, update: false} => r!([] 0b100),
             Self::Outline{thick: false, update: true} => r!([] 0b101),
             Self::Outline{thick: true, update: false} => r!([] 0b110),
@@ -144,14 +144,14 @@ impl GlyphConnectionType {
 }
 
 impl GlyphCoord {
-    fn gap_by_xsize(xsize: u8) -> u8 {
+    const fn gap_by_xsize(xsize: u8) -> u8 {
         let gap = xsize/5;
         if (xsize-gap) % 2 == 0 {gap+1}
         else {gap}
     }
 
     fn get_real_coords(self, glyphsize: V2) -> V2 {
-        let xgap = Self::gap_by_xsize(glyphsize.x as u8) as i16;
+        let xgap = i16::from(Self::gap_by_xsize(glyphsize.x as u8));
         let xglyph = glyphsize.x - xgap;
         let cx = self.x.i16();
         let x = match cx {
@@ -169,7 +169,8 @@ impl GlyphCoord {
 }
 
 impl GlyphStep {
-    /// Convert a raw 12-bit number to GlyphStep
+    /// Convert a raw 12-bit number to `GlyphStep`
+    #[must_use]
     pub fn from_raw(raw: Ranged<0, 0xFFF>) -> Self {
         use core::ops::Div;
         use core::ops::Rem;
@@ -185,21 +186,21 @@ impl GlyphStep {
     }
 
     /// Convert to a 12-bit representation, may be converted back by `from_raw`
+    #[must_use]
     pub const fn into_raw(self) -> u16 {
-        let rtp = self.tp.into_raw().u16();
-        let ryv = self.coord.y.u16();
-        let rxv = self.coord.x.u16();
-        rtp * 512 + ryv * 16 + rxv
+        self.tp.into_raw().u16() * 512 + self.coord.y.u16() * 16 + self.coord.x.u16()
     }
 
     /// Convert a pair of steps to raw data
+    #[must_use]
     pub const fn to_gdata(s1: Self, s2: Self) -> [u8; 3] {
         let s1 = s1.into_raw();
         let s2 = s2.into_raw();
-        [(s1 & 0xFF) as u8, ((s1 & 0xF00) >> 8) as u8 | ((s2 & 0x0F) << 4) as u8,  ((s2 & 0xFF0)>>4) as u8]
+        [(s1 & 0xFF) as u8, ((s1 & 0xF00) >> 8) as u8 | ((s2 << 4) & 0xF0) as u8,  ((s2 & 0xFF0)>>4) as u8]
     }
 
     /// Convert raw data to a pair of steps, panics on invalid input
+    #[must_use]
     pub fn from_gdata(gd: [u8; 3]) -> [Self;2] {
         let s1 = gd[0].as_ranged() + gd[1] % r!(0b10000) * r!(256);
         let s2 = gd[1].as_ranged() / r!(0b10000) + gd[2].as_ranged() * r!(0b10000);
@@ -208,7 +209,8 @@ impl GlyphStep {
 }
 
 /// Get a font rect size the library is trimmed for
-pub const fn fontsize_to_glyphsize(fsize: Ranged<6,63>)-> V2 {
+#[must_use]
+pub const fn fontsize_to_glyphsize(fsize: Ranged<6,63>) -> V2 {
     let fsize = fsize.i16()-5;
     let gap = (fsize + 3) / 4;
     let glsize = fsize+3 + (fsize%2);
@@ -224,13 +226,15 @@ fn get_glyphstep(data: &[[u8; 3]], item: usize) -> GlyphStep {
 
 
 impl GlyphTable {
-    /// Get GlyphStep from table by index
+    /// Get `GlyphStep` from table by index
+    #[must_use]
     pub fn get_glyphstep(&self, item: usize) -> GlyphStep {
         get_glyphstep(self.data, item)
     }
 }
 
 /// Get the glyph to be recalled by a pair of 'Recall' step and the step next to it
+#[must_use]
 pub fn recall_to_code(fst: GlyphCoord, snd: GlyphCoord) -> Ranged<0, 0x3ffff> {
     let code: Ranged<0, 15> = fst.x;
     let code: Ranged<0, 511> = code + fst.y*r!(16);
@@ -238,15 +242,16 @@ pub fn recall_to_code(fst: GlyphCoord, snd: GlyphCoord) -> Ranged<0, 0x3ffff> {
     let code: Ranged<0, 0x3ffff> = code + snd.y * r!(8192);
     code
 }
-/// Encode the character to recall as a pair of Recall type GlyphSteps
+/// Encode the character to recall as a pair of Recall type `GlyphSteps`
 ///
 /// The code may be decoded by [`recall_to_code`].
+#[must_use]
 pub fn code_to_recall(code: Ranged<0, 0x3ffff>) -> (GlyphCoord, GlyphCoord) {
-    let fstx = code % r!(16);
-    let fsty = code % r!(512) / r!(16);
-    let sndx = code % r!(8192) / r!(512);
-    let sndy = code / r!(8192);
-    (GlyphCoord{x: fstx, y:fsty},GlyphCoord{x: sndx, y:sndy})
+    let fst_x = code % r!(16);
+    let fst_y = code % r!(512) / r!(16);
+    let snd_x = code % r!(8192) / r!(512);
+    let snd_y = code / r!(8192);
+    (GlyphCoord{x: fst_x, y:fst_y},GlyphCoord{x: snd_x, y:snd_y})
 }
 
 /// Draw a glyph on Drawable.
@@ -300,7 +305,7 @@ pub fn draw_glyph<Colour:Copy>(steps: impl Iterator<Item=GlyphStep>, drawable: &
                     // Nothing for now
                 }
                 else {
-                    let center = if ((curr.x >= prev.x) == (curr.y >= prev.y)) != right {v2(prev.x, curr.y)} else {v2(curr.x, prev.y)};
+                    let center = if ((curr.x >= prev.x) == (curr.y >= prev.y)) == right {v2(curr.x, prev.y)} else {v2(prev.x, curr.y)};
                     let radii = curr-prev;
 
                     if right {
@@ -328,7 +333,7 @@ pub fn draw_glyph<Colour:Copy>(steps: impl Iterator<Item=GlyphStep>, drawable: &
     }
 }
 
-fn line_width(thick: bool, glyphsize: V2) -> u8 {
+const fn line_width(thick: bool, glyphsize: V2) -> u8 {
     let mainwidth = 1 + (glyphsize.x/16) as u8;
     if thick {mainwidth} else {(mainwidth + 1) / 2}
 }

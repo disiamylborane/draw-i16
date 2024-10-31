@@ -11,7 +11,7 @@
 //! ```
 
 /// 2D vector with i16 coordinates
-#[derive(Clone,Copy,Debug,PartialEq)]
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
 pub struct V2 {
     /// X coordinate of a vector
     pub x: i16,
@@ -35,7 +35,7 @@ impl core::ops::Sub for V2 {
 }
 impl core::ops::Mul<i8> for V2 {
     type Output = Self;
-    fn mul(self, rhs: i8) -> Self::Output {Self{x: self.x * rhs as i16, y: self.y * rhs as i16}}
+    fn mul(self, rhs: i8) -> Self::Output {Self{x: self.x * i16::from(rhs), y: self.y * i16::from(rhs)}}
 }
 impl core::ops::Div<i16> for V2 {
     type Output = Self;
@@ -43,6 +43,7 @@ impl core::ops::Div<i16> for V2 {
 }
 
 /// Create a new [`V2`]
+#[must_use]
 pub const fn v2(x: i16, y: i16) -> V2 {
     V2{x, y}
 }
